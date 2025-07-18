@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase"
 
 export async function GET() {
   try {
+    console.log("[/api/ads] Starting ads fetch...")
     const supabase = createServerSupabaseClient()
 
     const { data, error } = await supabase
@@ -14,17 +15,32 @@ export async function GET() {
     if (error) {
       // If table doesn't exist, return empty array
       if (error.code === "42P01") {
-        console.warn("Ads table not found - returning empty array")
+        console.warn("[/api/ads] ads table not found - returning empty array")
         return NextResponse.json({ ads: [] })
       }
-      console.error("Error fetching ads:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error("[/api/ads] database error:", error)
+      return NextResponse.json({
+        ads: [],
+        error: error.message,
+        code: error.code,
+        environment: process.env.NODE_ENV,
+      })
     }
 
-    console.log("Fetched ads:", data?.length || 0, "ads")
-    return NextResponse.json({ ads: data || [] })
+    console.log(`[/api/ads] Successfully fetched ${data?.length || 0} ads`)
+    return NextResponse.json({
+      ads: data || [],
+      count: data?.length || 0,
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
+    })
   } catch (error) {
-    console.error("Unexpected error in /api/ads:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    console.error("[/api/ads] unexpected error:", error)
+    return NextResponse.json({
+      ads: [],
+      error: "Internal Server Error",
+      details: error instanceof Error ? error.message : "Unknown error",
+      environment: process.env.NODE_ENV,
+    })
   }
 }

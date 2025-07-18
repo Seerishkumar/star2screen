@@ -8,9 +8,9 @@ export async function GET(request: Request) {
   const offset = (page - 1) * limit
 
   try {
+    console.log(`[/api/articles] Starting articles fetch (page: ${page}, limit: ${limit})...`)
     const supabase = createServerSupabaseClient()
 
-    // A very plain query – no joins – to avoid missing-relation errors
     const { data: articles, error } = await supabase
       .from("articles")
       .select("*")
@@ -18,33 +18,47 @@ export async function GET(request: Request) {
       .order("published_at", { ascending: false })
       .range(offset, offset + limit - 1)
 
-    /* ---------------------------------------------------------- */
-    /* Handle "relation does not exist" (PG code 42P01)           */
-    /* ---------------------------------------------------------- */
     if (error) {
       if (error.code === "42P01") {
-        // Table not created yet: return empty list, 200 OK
+        console.warn("[/api/articles] articles table not found - returning empty array")
         return NextResponse.json({ articles: [] })
       }
-      // Other DB errors → 500
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error("[/api/articles] database error:", error)
+      return NextResponse.json({
+        articles: [],
+        error: error.message,
+        code: error.code,
+        environment: process.env.NODE_ENV,
+      })
     }
 
-    // Total count (optional; ignore failures)
-    const { count } = await supabase.from("articles").select("*", { count: "exact", head: true })
+    // Get total count (optional; ignore failures)
+    const { count } = await supabase
+      .from("articles")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "published")
 
+    console.log(`[/api/articles] Successfully fetched ${articles?.length || 0} articles`)
     return NextResponse.json({
       articles: articles ?? [],
+      count: articles?.length || 0,
       pagination: {
         page,
         limit,
         total: count ?? 0,
         pages: count ? Math.ceil(count / limit) : 0,
       },
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
     })
   } catch (err) {
-    console.error("Unhandled error in /api/articles:", err)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    console.error("[/api/articles] unexpected error:", err)
+    return NextResponse.json({
+      articles: [],
+      error: "Internal Server Error",
+      details: err instanceof Error ? err.message : "Unknown error",
+      environment: process.env.NODE_ENV,
+    })
   }
 }
 

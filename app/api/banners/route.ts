@@ -1,43 +1,60 @@
 import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase"
 
-/**
- * Fetch active banners.
- * Handles both legacy `sort_order` and new `display_order` columns
- * and returns an empty array if the table has not been created yet.
- */
 export async function GET() {
   const supabase = createServerSupabaseClient()
 
-  // Helper that executes the query with the specified order column
-  const fetchBanners = async (orderColumn: "display_order" | "sort_order") => {
-    return supabase.from("banners").select("*").eq("is_active", true).order(orderColumn, { ascending: true })
-  }
-
   try {
-    // ❶ — First attempt with the newer `display_order` column
-    let { data, error } = await fetchBanners("display_order")
+    console.log("[/api/banners] Starting banner fetch...")
 
-    // ❷ — If the column doesn’t exist, retry with the legacy `sort_order`
+    // Try with display_order first
+    let { data, error } = await supabase
+      .from("banners")
+      .select("*")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+
+    // If display_order column doesn't exist, try sort_order
     if (error?.code === "42703") {
-      ;({ data, error } = await fetchBanners("sort_order"))
+      console.log("[/api/banners] display_order column not found, trying sort_order...")
+      ;({ data, error } = await supabase
+        .from("banners")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true }))
     }
 
-    // ❸ — If the table itself is missing, return an empty list
+    // If table doesn't exist at all
     if (error?.code === "42P01") {
       console.warn("[/api/banners] banners table not found – returning empty array")
       return NextResponse.json({ banners: [] })
     }
 
-    // Any other DB error
+    // Any other error
     if (error) {
       console.error("[/api/banners] database error:", error)
-      return NextResponse.json({ error: "Failed to fetch banners" }, { status: 500 })
+      return NextResponse.json({
+        banners: [],
+        error: error.message,
+        code: error.code,
+        environment: process.env.NODE_ENV,
+      })
     }
 
-    return NextResponse.json({ banners: data ?? [] })
+    console.log(`[/api/banners] Successfully fetched ${data?.length || 0} banners`)
+    return NextResponse.json({
+      banners: data || [],
+      count: data?.length || 0,
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
+    })
   } catch (err) {
     console.error("[/api/banners] unexpected error:", err)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    return NextResponse.json({
+      banners: [],
+      error: "Internal Server Error",
+      details: err instanceof Error ? err.message : "Unknown error",
+      environment: process.env.NODE_ENV,
+    })
   }
 }

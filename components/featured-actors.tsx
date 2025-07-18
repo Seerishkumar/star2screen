@@ -21,7 +21,7 @@ interface FeaturedProfile {
   primary_roles: string[] | null
   profession: string | null
   avatar_url: string | null
-  profile_picture_url: string | null
+  profile_image: string | null
   is_verified: boolean
   verified: boolean
   created_at: string
@@ -107,7 +107,7 @@ export function FeaturedActors() {
 
   const getProfileImage = (profile: FeaturedProfile): string => {
     // Priority order: profile_picture_url -> avatar_url -> placeholder
-    const imageUrl = profile.profile_picture_url || profile.avatar_url
+    const imageUrl = profile.profile_image || profile.avatar_url
 
     if (imageUrl) {
       console.log(`Image for ${getProfileName(profile)}: ${imageUrl}`)
@@ -400,7 +400,7 @@ export function FeaturedActors() {
                     <strong>Has Fallback Image:</strong> {profile.has_fallback_image ? "Yes" : "No"}
                   </p>
                   <p>
-                    <strong>Image URL:</strong> {profile.profile_picture_url || "None"}
+                    <strong>Image URL:</strong> {profile.profile_image || "None"}
                   </p>
                   <p>
                     <strong>Avatar URL:</strong> {profile.avatar_url || "None"}
