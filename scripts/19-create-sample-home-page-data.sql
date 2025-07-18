@@ -1,74 +1,150 @@
--- Create sample data for home page testing
--- This script creates test data for banners, ads, articles, and videos
+-- Create sample data for home page sections
+-- This ensures you have content to display in production
+
+-- Create banners table if it doesn't exist
+CREATE TABLE IF NOT EXISTS banners (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  subtitle TEXT,
+  image_url TEXT NOT NULL,
+  link_url TEXT,
+  button_text VARCHAR(100),
+  is_active BOOLEAN DEFAULT true,
+  display_order INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create ads table if it doesn't exist
+CREATE TABLE IF NOT EXISTS ads (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  image_url TEXT NOT NULL,
+  link_url TEXT,
+  category VARCHAR(100),
+  is_active BOOLEAN DEFAULT true,
+  sort_order INTEGER DEFAULT 0,
+  start_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  end_date TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create articles table if it doesn't exist
+CREATE TABLE IF NOT EXISTS articles (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  slug VARCHAR(255) UNIQUE NOT NULL,
+  excerpt TEXT,
+  content TEXT NOT NULL,
+  featured_image_url TEXT,
+  category VARCHAR(100),
+  author_name VARCHAR(255),
+  author_id UUID,
+  status VARCHAR(50) DEFAULT 'published',
+  published_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  reading_time_minutes INTEGER,
+  view_count INTEGER DEFAULT 0,
+  tags TEXT[],
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create videos table if it doesn't exist
+CREATE TABLE IF NOT EXISTS videos (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  video_url TEXT NOT NULL,
+  thumbnail_url TEXT,
+  category VARCHAR(100),
+  duration INTEGER,
+  view_count INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  is_featured BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
 -- Insert sample banners
-INSERT INTO banners (title, subtitle, image_url, link_url, button_text, is_active, display_order) VALUES
-('Welcome to FilmConnect', 'Connect with the best professionals in the film industry', '/hero-illustration.png', '/profiles', 'Browse Profiles', true, 1),
-('Find Your Next Project', 'Discover amazing opportunities and talented individuals', '/bustling-film-set.png', '/jobs', 'View Jobs', true, 2),
-('Join Our Community', 'Be part of the largest film industry network', '/director-in-discussion.png', '/register', 'Sign Up Now', true, 3)
-ON CONFLICT (title) DO UPDATE SET
-  subtitle = EXCLUDED.subtitle,
-  image_url = EXCLUDED.image_url,
-  link_url = EXCLUDED.link_url,
-  button_text = EXCLUDED.button_text,
-  is_active = EXCLUDED.is_active,
-  display_order = EXCLUDED.display_order;
+INSERT INTO banners (title, subtitle, image_url, link_url, button_text, display_order) VALUES
+('Welcome to FilmConnect', 'Connect with the best professionals in the film industry', '/bustling-film-set.png', '/profiles', 'Browse Profiles', 1),
+('Find Your Next Project', 'Discover amazing opportunities and talented individuals', '/director-in-discussion.png', '/jobs', 'View Jobs', 2),
+('Join Our Community', 'Be part of the largest film industry network', '/confident-actress.png', '/register', 'Sign Up Now', 3)
+ON CONFLICT DO NOTHING;
 
--- Insert sample ads/promotions
-INSERT INTO ads (title, description, image_url, link_url, category, is_active, sort_order) VALUES
-('Professional Headshots', 'Get stunning headshots from top photographers', '/confident-actress.png', '/services/photography', 'service', true, 1),
-('Acting Workshops', 'Improve your skills with expert-led workshops', '/elegant-actress.png', '/services/training', 'education', true, 2),
-('Casting Calls Open', 'New opportunities for actors and performers', '/film-scene-woman.png', '/jobs', 'casting', true, 3),
-('Equipment Rental', 'Professional film equipment at affordable rates', '/bustling-city-street.png', '/services/equipment', 'service', true, 4)
-ON CONFLICT (title) DO UPDATE SET
-  description = EXCLUDED.description,
-  image_url = EXCLUDED.image_url,
-  link_url = EXCLUDED.link_url,
-  category = EXCLUDED.category,
-  is_active = EXCLUDED.is_active,
-  sort_order = EXCLUDED.sort_order;
+-- Insert sample ads
+INSERT INTO ads (title, description, image_url, link_url, category, sort_order) VALUES
+('Professional Headshots', 'Get stunning headshots from top photographers in your area', '/elegant-actress.png', '/categories/photographer', 'photography', 1),
+('Casting Call Alert', 'Never miss an audition with our premium notification service', '/confident-actress.png', '/jobs', 'casting', 2),
+('Film Equipment Rental', 'Rent professional equipment at affordable rates', '/bustling-film-set.png', '/categories/technician', 'equipment', 3),
+('Acting Classes', 'Improve your craft with classes from industry professionals', '/elegant-woman-blue.png', '/categories/actor', 'education', 4)
+ON CONFLICT DO NOTHING;
 
 -- Insert sample articles
-INSERT INTO articles (title, excerpt, content, featured_image_url, category, author_name, status, published_at, reading_time_minutes, view_count) VALUES
-('The Future of Independent Filmmaking', 'Exploring new trends and technologies shaping independent cinema', 'Independent filmmaking has evolved dramatically over the past decade. With advances in digital technology, streaming platforms, and social media marketing, independent filmmakers now have more tools than ever to create and distribute their work...', '/inferno-escape.png', 'Industry News', 'Sarah Johnson', 'published', NOW() - INTERVAL ''1 day'', 5, 1250),
-('Building Your Acting Portfolio', 'Essential tips for creating a compelling acting portfolio', 'Your acting portfolio is your calling card in the entertainment industry. It should showcase your range, professionalism, and unique qualities that set you apart from other actors...', '/confident-young-professional.png', 'Career Tips', 'Michael Chen', 'published', NOW() - INTERVAL ''3 days'', 7, 890),
-('Behind the Scenes: Film Production Insights', 'A deep dive into the film production process', 'Film production is a complex orchestration of creative and technical elements. From pre-production planning to post-production editing, every stage requires careful coordination...', '/bustling-film-set.png', 'Behind the Scenes', 'Emma Rodriguez', 'published', NOW() - INTERVAL ''5 days'', 10, 2100),
-('Networking in the Film Industry', 'How to build meaningful professional relationships', 'Networking is crucial in the film industry, but it''s about more than just collecting business cards. Building genuine relationships and maintaining them over time is key to long-term success...', '/city-cafe-meetup.png', 'Career Tips', 'David Kim', 'published', NOW() - INTERVAL ''1 week'', 6, 1500),
-('The Rise of Streaming Platforms', 'How streaming services are changing content creation', 'Streaming platforms have revolutionized how we consume and create content. For filmmakers, this represents both opportunities and challenges in reaching audiences...', '/woman-contemplating-window.png', 'Industry News', 'Lisa Thompson', 'published', NOW() - INTERVAL ''10 days'', 8, 1800),
-('Cinematography Techniques for Beginners', 'Essential camera techniques every filmmaker should know', 'Great cinematography can elevate any story. Whether you''re working with a smartphone or professional equipment, understanding basic techniques is essential...', '/confident-businessman.png', 'Technical', 'Alex Martinez', 'published', NOW() - INTERVAL ''2 weeks'', 12, 950)
-ON CONFLICT (title) DO UPDATE SET
-  excerpt = EXCLUDED.excerpt,
-  content = EXCLUDED.content,
-  featured_image_url = EXCLUDED.featured_image_url,
-  category = EXCLUDED.category,
-  author_name = EXCLUDED.author_name,
-  status = EXCLUDED.status,
-  published_at = EXCLUDED.published_at,
-  reading_time_minutes = EXCLUDED.reading_time_minutes,
-  view_count = EXCLUDED.view_count;
+INSERT INTO articles (title, slug, excerpt, content, featured_image_url, category, author_name, reading_time_minutes, view_count) VALUES
+('Breaking into the Film Industry: A Beginner''s Guide', 'breaking-into-film-industry-beginners-guide', 'Essential tips and strategies for newcomers to the film industry', 'The film industry can seem daunting to newcomers, but with the right approach and mindset, anyone can build a successful career. This comprehensive guide covers everything from networking to building your portfolio...', '/bustling-film-set.png', 'Career Advice', 'Sarah Johnson', 8, 1250),
+('Top 10 Casting Directors to Follow in 2024', 'top-10-casting-directors-2024', 'Meet the casting directors who are shaping the industry this year', 'Casting directors play a crucial role in bringing stories to life. Here are the top 10 casting directors you should know about in 2024...', '/director-in-discussion.png', 'Industry News', 'Michael Chen', 6, 890),
+('The Art of Method Acting: Techniques and Tips', 'art-of-method-acting-techniques-tips', 'Explore the world of method acting and learn from the masters', 'Method acting has produced some of the most memorable performances in cinema history. Learn about the techniques used by legendary actors...', '/confident-actress.png', 'Acting Tips', 'Emma Rodriguez', 10, 2100),
+('Behind the Scenes: Life of a Film Producer', 'behind-scenes-life-film-producer', 'What does it really take to produce a successful film?', 'Film producers are the unsung heroes of the movie industry. They handle everything from financing to post-production...', '/confident-businessman.png', 'Career Spotlight', 'David Kim', 7, 675),
+('Digital vs Film: The Great Debate Continues', 'digital-vs-film-great-debate', 'Exploring the ongoing discussion between digital and traditional film', 'The debate between digital and film continues to divide filmmakers. Each medium has its unique advantages...', '/bustling-city-street.png', 'Technology', 'Lisa Thompson', 9, 1450),
+('Networking Events That Actually Work for Actors', 'networking-events-that-work-actors', 'How to make meaningful connections in the entertainment industry', 'Networking is crucial for actors, but not all events are created equal. Here''s how to identify and make the most of valuable networking opportunities...', '/city-cafe-meetup.png', 'Networking', 'James Wilson', 5, 980)
+ON CONFLICT (slug) DO NOTHING;
 
 -- Insert sample videos
-INSERT INTO videos (title, description, video_url, thumbnail_url, category, duration, view_count, is_active, is_featured) VALUES
-('FilmConnect Platform Overview', 'Learn how to use FilmConnect to advance your career', 'https://www.youtube.com/embed/dQw4w9WgXcQ', '/hero-illustration.png', 'Tutorial', 180, 5200, true, true),
-('Acting Masterclass Preview', 'A preview of our comprehensive acting masterclass', 'https://www.youtube.com/embed/dQw4w9WgXcQ', '/elegant-actress.png', 'Education', 240, 3800, true, true),
-('Behind the Scenes: Indie Film Production', 'Go behind the scenes of an independent film production', 'https://www.youtube.com/embed/dQw4w9WgXcQ', '/bustling-film-set.png', 'Behind the Scenes', 420, 7500, true, true),
-('Cinematography Tips and Tricks', 'Professional cinematographers share their secrets', 'https://www.youtube.com/embed/dQw4w9WgXcQ', '/director-in-discussion.png', 'Technical', 360, 4200, true, true),
-('Success Stories: From FilmConnect to Hollywood', 'Hear from professionals who found success through our platform', 'https://www.youtube.com/embed/dQw4w9WgXcQ', '/confident-indian-professional.png', 'Success Stories', 300, 6100, true, true)
-ON CONFLICT (title) DO UPDATE SET
-  description = EXCLUDED.description,
-  video_url = EXCLUDED.video_url,
-  thumbnail_url = EXCLUDED.thumbnail_url,
-  category = EXCLUDED.category,
-  duration = EXCLUDED.duration,
-  view_count = EXCLUDED.view_count,
-  is_active = EXCLUDED.is_active,
-  is_featured = EXCLUDED.is_featured;
+INSERT INTO videos (title, description, video_url, thumbnail_url, category, duration, view_count, is_featured) VALUES
+('Acting Masterclass: Emotional Range', 'Learn how to expand your emotional range as an actor', 'https://www.youtube.com/embed/dQw4w9WgXcQ', '/confident-actress.png', 'Acting', 1800, 15000, true),
+('Behind the Camera: Cinematography Basics', 'Essential cinematography techniques every filmmaker should know', 'https://www.youtube.com/embed/dQw4w9WgXcQ', '/bustling-film-set.png', 'Cinematography', 2400, 8500, true),
+('Director''s Vision: From Script to Screen', 'How directors bring their creative vision to life', 'https://www.youtube.com/embed/dQw4w9WgXcQ', '/director-in-discussion.png', 'Directing', 2100, 12000, true),
+('The Producer''s Journey', 'Follow a film from development to distribution', 'https://www.youtube.com/embed/dQw4w9WgXcQ', '/confident-businessman.png', 'Producing', 1950, 6800, false),
+('Casting Call Success Stories', 'Real actors share their breakthrough moments', 'https://www.youtube.com/embed/dQw4w9WgXcQ', '/elegant-woman-red.png', 'Casting', 1650, 9200, true)
+ON CONFLICT DO NOTHING;
 
--- Verify the data was inserted
-SELECT 'Banners' as table_name, COUNT(*) as count FROM banners WHERE is_active = true
+-- Update author_profiles to have some verified profiles
+UPDATE author_profiles 
+SET is_verified = true 
+WHERE id IN (
+  SELECT id FROM author_profiles 
+  WHERE full_name IS NOT NULL 
+  LIMIT 10
+);
+
+-- Create some sample user_media entries if the table exists
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'user_media') THEN
+    -- Insert sample media for existing profiles
+    INSERT INTO user_media (user_id, file_url, media_type, is_profile_picture)
+    SELECT 
+      user_id,
+      CASE 
+        WHEN category = 'actor' THEN '/confident-actress.png'
+        WHEN category = 'director' THEN '/director-in-discussion.png'
+        WHEN category = 'producer' THEN '/confident-businessman.png'
+        ELSE '/confident-young-professional.png'
+      END,
+      'image',
+      true
+    FROM author_profiles 
+    WHERE is_verified = true
+    AND user_id NOT IN (SELECT DISTINCT user_id FROM user_media WHERE is_profile_picture = true)
+    LIMIT 5
+    ON CONFLICT DO NOTHING;
+  END IF;
+END $$;
+
+-- Show summary of created data
+SELECT 
+  'banners' as table_name, COUNT(*) as record_count FROM banners WHERE is_active = true
 UNION ALL
-SELECT 'Ads' as table_name, COUNT(*) as count FROM ads WHERE is_active = true
+SELECT 
+  'ads' as table_name, COUNT(*) as record_count FROM ads WHERE is_active = true
 UNION ALL
-SELECT 'Articles' as table_name, COUNT(*) as count FROM articles WHERE status = 'published'
+SELECT 
+  'articles' as table_name, COUNT(*) as record_count FROM articles WHERE status = 'published'
 UNION ALL
-SELECT 'Videos' as table_name, COUNT(*) as count FROM videos WHERE is_active = true AND is_featured = true;
+SELECT 
+  'videos' as table_name, COUNT(*) as record_count FROM videos WHERE is_active = true
+UNION ALL
+SELECT 
+  'featured_videos' as table_name, COUNT(*) as record_count FROM videos WHERE is_featured = true
+UNION ALL
+SELECT 
+  'verified_profiles' as table_name, COUNT(*) as record_count FROM author_profiles WHERE is_verified = true;

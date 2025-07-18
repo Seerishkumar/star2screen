@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 export async function GET() {
   try {
-    const supabase = createServerSupabaseClient()
     const results = {
       environment: {
         NODE_ENV: process.env.NODE_ENV,
         VERCEL_ENV: process.env.VERCEL_ENV,
+        VERCEL_URL: process.env.VERCEL_URL,
         timestamp: new Date().toISOString(),
       },
       banners: { data: [], error: null, count: 0 },
@@ -90,22 +90,7 @@ export async function GET() {
     try {
       const { data: profiles, error: profilesError } = await supabase
         .from("author_profiles")
-        .select(`
-          id,
-          user_id,
-          full_name,
-          bio,
-          category,
-          is_verified,
-          created_at,
-          user_media!inner (
-            id,
-            file_url,
-            blob_url,
-            media_type,
-            is_profile_picture
-          )
-        `)
+        .select("*")
         .eq("is_verified", true)
         .limit(8)
 

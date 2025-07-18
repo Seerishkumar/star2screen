@@ -1,98 +1,138 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
-/**
- * GET /api/profiles/featured
- *
- * Fetches up to 16 recent author profiles and resolves a display image for each
- * without relying on PostgREST relationships (which do **not** exist in
- * production and caused: “Could not find a relationship between
- * 'author_profiles' and 'user_media' in the schema cache”).
- *
- * Resolution order per profile:
- * 1. First media row marked is_profile_picture && media_type='image'
- * 2. First media row with media_type='image'
- * 3. profile.avatar_url
- * 4. null  ➜  the client will render a placeholder
- */
 export async function GET() {
   try {
-    // --- Initialise Supabase -------------------------------------------------
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    console.log("[/api/profiles/featured] Starting featured profiles fetch...")
 
-    if (!supabaseUrl || !serviceRoleKey) {
-      return NextResponse.json({ error: "Missing Supabase environment variables" }, { status: 500 })
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey)
-
-    // --- Fetch profiles ------------------------------------------------------
-    const { data: profiles, error: profilesErr } = await supabase
+    // Get ALL profiles from the database (not just verified ones)
+    const { data: profiles, error: profilesError } = await supabase
       .from("author_profiles")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(16)
+      .limit(20) // Increased limit to show more profiles
 
-    if (profilesErr) {
-      console.error("[featured-profiles] DB error (profiles):", profilesErr)
-      return NextResponse.json({ error: profilesErr.message }, { status: 500 })
+    if (profilesError) {
+      console.error("[/api/profiles/featured] Profile query error:", profilesError)
+      if (profilesError.code === "42P01") {
+        console.log("[/api/profiles/featured] author_profiles table doesn't exist")
+        return NextResponse.json({ profiles: [] })
+      }
+      return NextResponse.json(
+        {
+          error: profilesError.message,
+          code: profilesError.code,
+          details: profilesError,
+        },
+        { status: 500 },
+      )
     }
 
-    // --- For each profile resolve an image & media count ---------------------
-    const processed = await Promise.all(
-      (profiles || []).map(async (p) => {
-        // 1️⃣ explicit profile picture
-        const { data: pic } = await supabase
-          .from("user_media")
-          .select("blob_url,file_url")
-          .eq("user_id", p.user_id)
-          .eq("is_profile_picture", true)
-          .eq("media_type", "image")
-          .limit(1)
-          .maybeSingle()
+    console.log(`[/api/profiles/featured] Found ${profiles?.length || 0} total profiles`)
 
-        // 2️⃣ first image if no explicit picture
-        let fallback: { blob_url: string | null; file_url: string | null } | null = null
-        if (!pic) {
-          const { data } = await supabase
-            .from("user_media")
-            .select("blob_url,file_url")
-            .eq("user_id", p.user_id)
-            .eq("media_type", "image")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle()
-          fallback = data
-        }
+    if (!profiles || profiles.length === 0) {
+      console.log("[/api/profiles/featured] No profiles found in database")
+      return NextResponse.json({
+        profiles: [],
+        message: "No profiles found in database",
+        debug: {
+          query: "SELECT * FROM author_profiles ORDER BY created_at DESC LIMIT 20",
+          error: null,
+        },
+      })
+    }
 
-        // media count (for badge)
-        const { count: mediaCount } = await supabase
-          .from("user_media")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", p.user_id)
+    // Get media for all profiles in one efficient query
+    const userIds = profiles.map((p) => p.user_id)
+    console.log(`[/api/profiles/featured] Fetching media for ${userIds.length} users`)
 
-        const resolvedImage =
-          pic?.blob_url || pic?.file_url || fallback?.blob_url || fallback?.file_url || p.avatar_url || null
+    const { data: mediaFiles, error: mediaError } = await supabase
+      .from("user_media")
+      .select("user_id, file_url, blob_url, media_type, is_profile_picture, created_at")
+      .in("user_id", userIds)
+      .eq("media_type", "image")
+      .order("created_at", { ascending: false })
 
-        return {
-          ...p,
-          profile_image: resolvedImage,
-          media_count: mediaCount ?? 0,
-          has_profile_picture: !!pic,
-          has_fallback_image: !!fallback,
-        }
-      }),
-    )
+    if (mediaError) {
+      console.error("[/api/profiles/featured] Media query error:", mediaError)
+      // Continue without media if table doesn't exist or has issues
+    }
+
+    console.log(`[/api/profiles/featured] Found ${mediaFiles?.length || 0} media files`)
+
+    // Process each profile and attach their media
+    const profilesWithMedia = profiles.map((profile) => {
+      const userMedia = mediaFiles?.filter((media) => media.user_id === profile.user_id) || []
+
+      // Find profile picture first, then any image
+      const profilePicture = userMedia.find((media) => media.is_profile_picture === true)
+      const anyImage = userMedia[0] // First image if no profile picture
+
+      // Determine the best image URL
+      let imageUrl = null
+      if (profilePicture) {
+        imageUrl = profilePicture.blob_url || profilePicture.file_url
+      } else if (anyImage) {
+        imageUrl = anyImage.blob_url || anyImage.file_url
+      } else if (profile.avatar_url) {
+        imageUrl = profile.avatar_url
+      }
+
+      const processedProfile = {
+        id: profile.id,
+        user_id: profile.user_id,
+        full_name: profile.full_name,
+        display_name: profile.display_name,
+        stage_name: profile.stage_name,
+        bio: profile.bio,
+        category: profile.category,
+        profession: profile.profession,
+        primary_roles: profile.primary_roles,
+        location: profile.location,
+        city: profile.city,
+        experience_years: profile.experience_years,
+        is_verified: profile.is_verified || false,
+        avatar_url: profile.avatar_url,
+        profile_image: imageUrl,
+        media_count: userMedia.length,
+        has_profile_picture: !!profilePicture,
+        has_any_image: !!anyImage,
+        created_at: profile.created_at,
+      }
+
+      console.log(
+        `[/api/profiles/featured] Processed ${profile.full_name || profile.display_name || "Unknown"}: image=${!!imageUrl}, media_count=${userMedia.length}`,
+      )
+
+      return processedProfile
+    })
+
+    console.log(`[/api/profiles/featured] Successfully processed ${profilesWithMedia.length} profiles`)
 
     return NextResponse.json({
-      profiles: processed,
-      total: processed.length,
+      profiles: profilesWithMedia,
+      count: profilesWithMedia.length,
+      total_in_db: profiles.length,
+      profiles_with_images: profilesWithMedia.filter((p) => p.profile_image).length,
+      profiles_without_images: profilesWithMedia.filter((p) => !p.profile_image).length,
       environment: process.env.NODE_ENV,
-      generated_at: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
+      debug: {
+        total_profiles_queried: profiles.length,
+        total_media_files: mediaFiles?.length || 0,
+        user_ids_searched: userIds.length,
+      },
     })
-  } catch (err) {
-    console.error("[featured-profiles] unexpected:", err)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+  } catch (error) {
+    console.error("[/api/profiles/featured] Unexpected error:", error)
+    return NextResponse.json(
+      {
+        profiles: [],
+        error: "Internal Server Error",
+        details: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : null,
+      },
+      { status: 500 },
+    )
   }
 }
