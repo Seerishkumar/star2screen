@@ -3,14 +3,23 @@ import { createClient } from "@/lib/supabase"
 
 export async function GET(request: Request, { params }: { params: { userId: string } }) {
   try {
-    const { userId } = params
-    console.log("Debugging profile for userId:", userId)
+    const userId = params.userId
+    console.log(`Debug profile API called for user: ${userId}`)
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!supabaseUrl || !serviceRoleKey) {
-      return NextResponse.json({ error: "Missing Supabase environment variables" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Missing environment variables",
+          details: {
+            hasSupabaseUrl: !!supabaseUrl,
+            hasServiceRoleKey: !!serviceRoleKey,
+          },
+        },
+        { status: 500 },
+      )
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey)
@@ -22,9 +31,6 @@ export async function GET(request: Request, { params }: { params: { userId: stri
       .eq("user_id", userId)
       .single()
 
-    console.log("Profile data:", profile)
-    console.log("Profile error:", profileError)
-
     // Get all media files for this user
     const { data: mediaFiles, error: mediaError } = await supabase
       .from("user_media")
@@ -32,44 +38,50 @@ export async function GET(request: Request, { params }: { params: { userId: stri
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
 
-    console.log("Media files:", mediaFiles)
-    console.log("Media error:", mediaError)
-
-    // Get profile picture specifically
-    const { data: profilePicture, error: profilePictureError } = await supabase
-      .from("user_media")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("is_profile_picture", true)
-      .single()
-
-    console.log("Profile picture:", profilePicture)
-    console.log("Profile picture error:", profilePictureError)
-
-    // Check if user exists in auth.users
+    // Get auth user data
     const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(userId)
-    console.log("Auth user:", authUser)
-    console.log("Auth error:", authError)
 
-    return NextResponse.json({
+    const debugInfo = {
       userId,
-      profile,
-      profileError,
-      mediaFiles,
-      mediaError,
-      profilePicture,
-      profilePictureError,
-      authUser: authUser?.user || null,
-      authError,
-      mediaCount: mediaFiles?.length || 0,
-      hasProfilePicture: !!profilePicture,
-    })
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
+      profile: {
+        found: !!profile,
+        data: profile,
+        error: profileError,
+      },
+      media: {
+        count: mediaFiles?.length || 0,
+        files: mediaFiles,
+        error: mediaError,
+      },
+      authUser: {
+        found: !!authUser.user,
+        email: authUser.user?.email,
+        error: authError,
+      },
+      analysis: {
+        hasProfilePicture: mediaFiles?.some((m) => m.is_profile_picture && m.media_type === "image") || false,
+        hasAnyImages: mediaFiles?.some((m) => m.media_type === "image") || false,
+        profilePictureUrl:
+          mediaFiles?.find((m) => m.is_profile_picture && m.media_type === "image")?.blob_url ||
+          mediaFiles?.find((m) => m.is_profile_picture && m.media_type === "image")?.file_url,
+        firstImageUrl:
+          mediaFiles?.find((m) => m.media_type === "image")?.blob_url ||
+          mediaFiles?.find((m) => m.media_type === "image")?.file_url,
+        avatarUrl: profile?.avatar_url,
+      },
+    }
+
+    return NextResponse.json(debugInfo)
   } catch (error) {
-    console.error("Debug API error:", error)
+    console.error("Profile debug error:", error)
     return NextResponse.json(
       {
-        error: "Internal server error",
+        error: "Profile debug failed",
         details: error instanceof Error ? error.message : "Unknown error",
+        userId: params.userId,
+        environment: process.env.NODE_ENV,
       },
       { status: 500 },
     )

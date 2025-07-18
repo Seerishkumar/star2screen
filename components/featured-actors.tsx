@@ -6,7 +6,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Star, MapPin, Calendar, ChevronLeft, ChevronRight, Eye, Camera } from "lucide-react"
+import { Star, MapPin, Calendar, ChevronLeft, ChevronRight, Eye, Camera, AlertCircle } from "lucide-react"
 
 interface FeaturedProfile {
   id: string
@@ -28,7 +28,7 @@ interface FeaturedProfile {
   media_count: number
   has_profile_picture: boolean
   has_fallback_image: boolean
-  debug_info?: any
+  processing_error?: string
 }
 
 export function FeaturedActors() {
@@ -36,6 +36,7 @@ export function FeaturedActors() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [debugMode, setDebugMode] = useState(false)
+  const [apiResponse, setApiResponse] = useState<any>(null)
 
   useEffect(() => {
     fetchFeaturedProfiles()
@@ -47,26 +48,51 @@ export function FeaturedActors() {
       setError(null)
 
       console.log("Fetching featured profiles...")
-      const response = await fetch("/api/profiles/featured", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
+
+      // Add cache busting and better error handling
+      const response = await fetch(
+        "/api/profiles/featured?" +
+          new URLSearchParams({
+            t: Date.now().toString(),
+            cache: "no-store",
+          }),
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+          },
         },
-      })
+      )
 
       console.log("Response status:", response.status)
+      console.log("Response headers:", Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
         const errorText = await response.text()
         console.error("API Error Response:", errorText)
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { error: errorText }
+        }
+
+        throw new Error(`HTTP ${response.status}: ${errorData.error || response.statusText}`)
       }
 
       const data = await response.json()
       console.log("API Response:", data)
+      setApiResponse(data)
 
       const profilesArray = Array.isArray(data) ? data : data.profiles || []
       setProfiles(profilesArray)
+
+      if (profilesArray.length === 0) {
+        console.warn("No profiles returned from API")
+      }
     } catch (err) {
       console.error("Error fetching featured profiles:", err)
       setError(err instanceof Error ? err.message : "Failed to load featured profiles")
@@ -152,7 +178,10 @@ export function FeaturedActors() {
           <div className="text-center">
             <h2 className="text-2xl font-bold text-primary mb-4">Featured Professionals</h2>
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 max-w-2xl mx-auto">
-              <p className="text-red-600 font-medium">Error loading profiles:</p>
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="h-5 w-5 text-red-500" />
+                <p className="text-red-600 font-medium">Error loading profiles:</p>
+              </div>
               <p className="text-red-500 text-sm mt-1 break-words">{error}</p>
               <div className="mt-3 space-x-2">
                 <Button onClick={fetchFeaturedProfiles} variant="outline" size="sm">
@@ -161,6 +190,16 @@ export function FeaturedActors() {
                 <Button asChild variant="outline" size="sm">
                   <a href="/api/profiles/featured" target="_blank" rel="noreferrer">
                     Check API
+                  </a>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <a href="/api/debug/environment" target="_blank" rel="noreferrer">
+                    Check Environment
+                  </a>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <a href="/api/debug/database-connection" target="_blank" rel="noreferrer">
+                    Test Database
                   </a>
                 </Button>
               </div>
@@ -177,15 +216,27 @@ export function FeaturedActors() {
         <div className="container px-4 md:px-6">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-primary mb-4">Featured Professionals</h2>
-            <p className="text-muted-foreground mb-4">No featured professionals found.</p>
-            <p className="text-sm text-gray-500 mb-6">Create some profiles to see them here.</p>
-            <div className="mt-4 space-x-2">
-              <Button asChild variant="outline">
-                <Link href="/profile/edit">Create Profile</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/profiles">View All Profiles</Link>
-              </Button>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 max-w-2xl mx-auto">
+              <p className="text-yellow-800 font-medium">No featured professionals found.</p>
+              <p className="text-sm text-yellow-700 mt-1">This might be due to:</p>
+              <ul className="text-sm text-yellow-700 mt-2 list-disc list-inside">
+                <li>No profiles in the database</li>
+                <li>Database connection issues</li>
+                <li>Environment configuration problems</li>
+              </ul>
+              <div className="mt-4 space-x-2">
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/profile/edit">Create Profile</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/profiles">View All Profiles</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <a href="/api/debug/database-connection" target="_blank" rel="noreferrer">
+                    Test Database
+                  </a>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -212,7 +263,39 @@ export function FeaturedActors() {
             </Button>
           </div>
         </div>
-        <p className="text-muted-foreground mb-6">Discover top talent across all categories</p>
+        <p className="text-muted-foreground mb-6">
+          Discover top talent across all categories ({profiles.length} professionals)
+        </p>
+
+        {/* Debug Info Panel */}
+        {debugMode && apiResponse && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h3 className="font-semibold text-blue-800 mb-2">Debug Information</h3>
+            <div className="text-sm text-blue-700 space-y-1">
+              <p>
+                <strong>Environment:</strong> {apiResponse.environment || "Unknown"}
+              </p>
+              <p>
+                <strong>Total Profiles:</strong> {apiResponse.total || profiles.length}
+              </p>
+              <p>
+                <strong>Timestamp:</strong> {apiResponse.timestamp || "Unknown"}
+              </p>
+              <div className="mt-2 space-x-2">
+                <Button asChild variant="outline" size="sm" className="text-xs bg-transparent">
+                  <a href="/api/debug/environment" target="_blank" rel="noreferrer">
+                    Environment Check
+                  </a>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="text-xs bg-transparent">
+                  <a href="/api/debug/database-connection" target="_blank" rel="noreferrer">
+                    Database Test
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {profiles.map((profile) => (
@@ -234,8 +317,16 @@ export function FeaturedActors() {
                       }}
                     />
 
+                    {/* Processing Error Badge */}
+                    {profile.processing_error && (
+                      <Badge className="absolute top-2 left-2 bg-red-500 text-white text-xs">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        Error
+                      </Badge>
+                    )}
+
                     {/* Media Count Badge */}
-                    {profile.media_count > 0 && (
+                    {!profile.processing_error && profile.media_count > 0 && (
                       <Badge className="absolute top-2 left-2 bg-green-500 text-white text-xs">
                         <Camera className="h-3 w-3 mr-1" />
                         {profile.media_count}
@@ -285,6 +376,10 @@ export function FeaturedActors() {
                         {profile.bio.length > 80 ? `${profile.bio.substring(0, 80)}...` : profile.bio}
                       </p>
                     )}
+
+                    {profile.processing_error && (
+                      <p className="text-xs text-red-500 mt-2">Processing error: {profile.processing_error}</p>
+                    )}
                   </CardContent>
                 </Card>
               </Link>
@@ -310,10 +405,20 @@ export function FeaturedActors() {
                   <p>
                     <strong>Avatar URL:</strong> {profile.avatar_url || "None"}
                   </p>
-                  <div className="mt-1">
+                  {profile.processing_error && (
+                    <p>
+                      <strong>Error:</strong> {profile.processing_error}
+                    </p>
+                  )}
+                  <div className="mt-1 space-x-1">
                     <Button asChild variant="outline" size="sm" className="text-xs bg-transparent">
                       <a href={`/api/debug/profile/${profile.user_id}`} target="_blank" rel="noreferrer">
                         Debug Profile
+                      </a>
+                    </Button>
+                    <Button asChild variant="outline" size="sm" className="text-xs bg-transparent">
+                      <a href={`/profiles/${profile.user_id}`} target="_blank" rel="noreferrer">
+                        View Profile
                       </a>
                     </Button>
                   </div>
