@@ -1,46 +1,53 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 export async function GET() {
   try {
-    console.log("[/api/ads] Starting ads fetch...")
-    const supabase = createServerSupabaseClient()
+    console.log("[/api/ads] Fetching ads...")
 
-    const { data, error } = await supabase
+    const { data: ads, error } = await supabase
       .from("ads")
       .select("*")
       .eq("is_active", true)
       .order("sort_order", { ascending: true })
+      .limit(10)
 
     if (error) {
-      // If table doesn't exist, return empty array
+      console.error("[/api/ads] Database error:", error)
       if (error.code === "42P01") {
-        console.warn("[/api/ads] ads table not found - returning empty array")
-        return NextResponse.json({ ads: [] })
+        // Table doesn't exist, return sample data
+        const sampleAds = [
+          {
+            id: 1,
+            title: "Professional Headshots",
+            description: "Get stunning headshots from top photographers",
+            image_url: "/elegant-actress.png",
+            link_url: "/categories/photographer",
+          },
+          {
+            id: 2,
+            title: "Casting Call Alert",
+            description: "Never miss an audition with our premium service",
+            image_url: "/confident-actress.png",
+            link_url: "/jobs",
+          },
+          {
+            id: 3,
+            title: "Film Equipment Rental",
+            description: "Rent professional equipment at affordable rates",
+            image_url: "/bustling-film-set.png",
+            link_url: "/categories/technician",
+          },
+        ]
+        return NextResponse.json({ ads: sampleAds })
       }
-      console.error("[/api/ads] database error:", error)
-      return NextResponse.json({
-        ads: [],
-        error: error.message,
-        code: error.code,
-        environment: process.env.NODE_ENV,
-      })
+      return NextResponse.json({ ads: [] })
     }
 
-    console.log(`[/api/ads] Successfully fetched ${data?.length || 0} ads`)
-    return NextResponse.json({
-      ads: data || [],
-      count: data?.length || 0,
-      environment: process.env.NODE_ENV,
-      timestamp: new Date().toISOString(),
-    })
+    console.log(`[/api/ads] Found ${ads?.length || 0} ads`)
+    return NextResponse.json({ ads: ads || [] })
   } catch (error) {
-    console.error("[/api/ads] unexpected error:", error)
-    return NextResponse.json({
-      ads: [],
-      error: "Internal Server Error",
-      details: error instanceof Error ? error.message : "Unknown error",
-      environment: process.env.NODE_ENV,
-    })
+    console.error("[/api/ads] Unexpected error:", error)
+    return NextResponse.json({ ads: [] })
   }
 }

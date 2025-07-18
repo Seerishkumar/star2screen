@@ -7,14 +7,12 @@ import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 interface Banner {
-  id: string
-  title: string
-  subtitle: string | null
+  id: number
+  title?: string
+  subtitle?: string
   image_url: string
-  link_url: string | null
-  button_text: string | null
-  is_active: boolean
-  display_order: number
+  link_url?: string
+  button_text?: string
 }
 
 interface BannerCarouselProps {
@@ -22,98 +20,109 @@ interface BannerCarouselProps {
 }
 
 export function BannerCarousel({ banners = [] }: BannerCarouselProps) {
-  // Always work with a real array
-  const activeBanners = (banners ?? []).filter((b) => b?.is_active)
   const [currentIndex, setCurrentIndex] = useState(0)
 
-  useEffect(() => {
-    if (activeBanners.length === 0) return
+  // Filter out any invalid banners
+  const validBanners = banners.filter((banner) => banner && banner.image_url)
 
-    const interval = setInterval(() => {
-      setCurrentIndex((prevIndex) => (prevIndex + 1) % activeBanners.length)
+  useEffect(() => {
+    if (validBanners.length <= 1) return
+
+    const timer = setInterval(() => {
+      setCurrentIndex((prevIndex) => (prevIndex + 1) % validBanners.length)
     }, 5000)
 
-    return () => clearInterval(interval)
-  }, [activeBanners.length])
+    return () => clearInterval(timer)
+  }, [validBanners.length])
+
+  if (validBanners.length === 0) {
+    return (
+      <div className="relative h-96 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold mb-4">Welcome to Stars2Screen</h1>
+            <p className="text-xl mb-8">Connect with the best professionals in the film industry</p>
+            <Button asChild size="lg" className="bg-white text-blue-600 hover:bg-gray-100">
+              <Link href="/profiles">Browse Profiles</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const currentBanner = validBanners[currentIndex]
 
   const goToPrevious = () => {
-    setCurrentIndex((prevIndex) => (prevIndex - 1 + activeBanners.length) % activeBanners.length)
+    setCurrentIndex((prevIndex) => (prevIndex - 1 + validBanners.length) % validBanners.length)
   }
 
   const goToNext = () => {
-    setCurrentIndex((prevIndex) => (prevIndex + 1) % activeBanners.length)
+    setCurrentIndex((prevIndex) => (prevIndex + 1) % validBanners.length)
   }
-
-  if (activeBanners.length === 0) {
-    return null
-  }
-
-  const currentBanner = activeBanners[currentIndex]!
 
   return (
-    <section className="relative h-[500px] md:h-[600px] overflow-hidden">
+    <div className="relative h-96 overflow-hidden">
       {/* Banner Image */}
-      <div className="absolute inset-0">
+      <div className="relative h-full">
         <Image
-          src={currentBanner.image_url || "/placeholder.svg?height=600&width=1200"}
-          alt={currentBanner.title}
+          src={currentBanner.image_url || "/placeholder.svg?height=400&width=800"}
+          alt={currentBanner.title || "Banner"}
           fill
           className="object-cover"
           priority
-          sizes="100vw"
         />
         <div className="absolute inset-0 bg-black/40" />
       </div>
 
-      {/* Content */}
-      <div className="relative z-10 container mx-auto px-4 h-full flex items-center">
-        <div className="max-w-2xl text-white">
-          <h1 className="text-4xl md:text-6xl font-bold mb-4 leading-tight">{currentBanner.title}</h1>
-          {currentBanner.subtitle && (
-            <p className="text-lg md:text-xl mb-8 opacity-90 leading-relaxed">{currentBanner.subtitle}</p>
-          )}
-          {currentBanner.link_url && currentBanner.button_text && (
-            <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
-              <Link href={currentBanner.link_url}>{currentBanner.button_text}</Link>
+      {/* Content Overlay */}
+      <div className="absolute inset-0 flex items-center justify-center text-white">
+        <div className="text-center max-w-4xl px-4">
+          {currentBanner.title && <h1 className="text-4xl md:text-6xl font-bold mb-4">{currentBanner.title}</h1>}
+          {currentBanner.subtitle && <p className="text-xl md:text-2xl mb-8">{currentBanner.subtitle}</p>}
+          {currentBanner.link_url && (
+            <Button asChild size="lg" className="bg-white text-black hover:bg-gray-100">
+              <Link href={currentBanner.link_url}>{currentBanner.button_text || "Learn More"}</Link>
             </Button>
           )}
         </div>
       </div>
 
       {/* Navigation Arrows */}
-      {activeBanners.length > 1 && (
+      {validBanners.length > 1 && (
         <>
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
             onClick={goToPrevious}
-            className="absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-black/20 hover:bg-black/40 text-white border-0 h-12 w-12 p-0"
+            className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+            aria-label="Previous banner"
           >
             <ChevronLeft className="h-6 w-6" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
+          </button>
+          <button
             onClick={goToNext}
-            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 bg-black/20 hover:bg-black/40 text-white border-0 h-12 w-12 p-0"
+            className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+            aria-label="Next banner"
           >
             <ChevronRight className="h-6 w-6" />
-          </Button>
+          </button>
         </>
       )}
 
       {/* Dots Indicator */}
-      {activeBanners.length > 1 && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex space-x-2">
-          {activeBanners.map((_, index) => (
+      {validBanners.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
+          {validBanners.map((_, index) => (
             <button
               key={index}
               onClick={() => setCurrentIndex(index)}
-              className={`w-3 h-3 rounded-full transition-all ${index === currentIndex ? "bg-white" : "bg-white/50"}`}
+              className={`w-3 h-3 rounded-full transition-colors ${
+                index === currentIndex ? "bg-white" : "bg-white/50"
+              }`}
+              aria-label={`Go to banner ${index + 1}`}
             />
           ))}
         </div>
       )}
-    </section>
+    </div>
   )
 }

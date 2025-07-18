@@ -1,10 +1,24 @@
 /* ------------------------------------------------------------------ */
 /* Minimal shared types – keep in sync with your DB models            */
 /* ------------------------------------------------------------------ */
-type Banner = { id: number; image_url: string; headline?: string; cta_url?: string }
-type Ad = { id: number; image_url: string; title: string; link_url: string }
-type Article = { id: number; title: string; slug: string; thumbnail_url?: string; excerpt?: string }
-type Video = { id: number; id_youtube?: string; thumbnail_url: string; title: string }
+type Banner = {
+  id: number
+  image_url: string
+  title?: string
+  subtitle?: string
+  link_url?: string
+  button_text?: string
+}
+type Ad = { id: number; image_url: string; title: string; link_url: string; description?: string }
+type Article = {
+  id: number
+  title: string
+  slug: string
+  featured_image_url?: string
+  excerpt?: string
+  author_name?: string
+}
+type Video = { id: number; video_url: string; thumbnail_url: string; title: string; description?: string }
 
 import { SearchForm } from "@/components/search-form"
 import { CategoryGrid } from "@/components/category-grid"
@@ -24,7 +38,7 @@ async function safeFetch<T>(path: string): Promise<T[]> {
     const baseUrl = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
       : process.env.NODE_ENV === "production"
-        ? "https://your-domain.com" // Replace with your actual domain
+        ? "https://www.stars2screen.com" // Your actual domain
         : "http://localhost:3000"
 
     const fullUrl = `${baseUrl}${path}`
@@ -44,6 +58,11 @@ async function safeFetch<T>(path: string): Promise<T[]> {
 
     const json = await res.json()
     console.log(`[Home] Response from ${path}:`, json)
+
+    // Handle different response formats
+    if (Array.isArray(json)) {
+      return json as T[]
+    }
 
     // the API returns { banners: [...] } / { ads: [...] } / etc.
     const firstKey = Object.keys(json)[0] as keyof typeof json
@@ -77,26 +96,40 @@ export default async function Home() {
   })
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col min-h-screen">
       {/* Debug Info - Only show in development */}
       {process.env.NODE_ENV === "development" && (
-        <div className="bg-yellow-100 p-4 text-sm">
+        <div className="bg-yellow-100 p-4 text-sm border-b">
           <strong>Debug Info:</strong> Banners: {banners.length}, Ads: {ads.length}, Articles: {articles.length},
           Videos: {videos.length}
+          <br />
+          <strong>Environment:</strong> {process.env.NODE_ENV}
+          <br />
+          <strong>Base URL:</strong>{" "}
+          {process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"}
         </div>
       )}
 
       {/* Banner Carousel */}
-      <BannerCarousel banners={banners} />
+      {banners.length > 0 ? (
+        <BannerCarousel banners={banners} />
+      ) : (
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-20">
+          <div className="container px-4 md:px-6 text-center">
+            <h1 className="text-4xl font-bold mb-4">Welcome to Stars2Screen</h1>
+            <p className="text-xl mb-8">Connect with the best professionals in the film industry</p>
+          </div>
+        </div>
+      )}
 
       {/* Search Section */}
-      <section className="py-12">
+      <section className="py-12 bg-white">
         <div className="container px-4 md:px-6">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-2xl font-bold tracking-tight text-primary">Find Your Perfect Match</h2>
-            <p className="text-muted-foreground">Search for professionals, services, and opportunities</p>
+            <h2 className="text-3xl font-bold tracking-tight text-primary mb-4">Find Your Perfect Match</h2>
+            <p className="text-lg text-muted-foreground mb-8">Search for professionals, services, and opportunities</p>
           </div>
-          <div className="mx-auto mt-8 max-w-md">
+          <div className="mx-auto max-w-md">
             <SearchForm />
           </div>
         </div>
@@ -106,12 +139,22 @@ export default async function Home() {
       <StatisticsSection />
 
       {/* Ads Scroller */}
-      <AdsScroller ads={ads} />
+      {ads.length > 0 ? (
+        <AdsScroller ads={ads} />
+      ) : (
+        <section className="py-8 bg-gray-50">
+          <div className="container px-4 md:px-6">
+            <div className="text-center text-muted-foreground">
+              <p>Featured advertisements will appear here</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Categories Section */}
       <section className="py-12 bg-gray-50">
         <div className="container px-4 md:px-6">
-          <h2 className="mb-8 text-2xl font-bold text-center text-primary">Browse by Category</h2>
+          <h2 className="mb-8 text-3xl font-bold text-center text-primary">Browse by Category</h2>
           <CategoryGrid />
         </div>
       </section>
@@ -120,10 +163,32 @@ export default async function Home() {
       <FeaturedActors />
 
       {/* Articles & News Section */}
-      <ArticlesSection articles={articles} />
+      {articles.length > 0 ? (
+        <ArticlesSection articles={articles} />
+      ) : (
+        <section className="py-12 bg-white">
+          <div className="container px-4 md:px-6">
+            <h2 className="mb-8 text-3xl font-bold text-center text-primary">Latest Articles & News</h2>
+            <div className="text-center text-muted-foreground">
+              <p>Latest industry articles and news will appear here</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Video Showcase Section */}
-      <VideoShowcase videos={videos} />
+      {videos.length > 0 ? (
+        <VideoShowcase videos={videos} />
+      ) : (
+        <section className="py-12 bg-gray-50">
+          <div className="container px-4 md:px-6">
+            <h2 className="mb-8 text-3xl font-bold text-center text-primary">Featured Videos</h2>
+            <div className="text-center text-muted-foreground">
+              <p>Featured industry videos will appear here</p>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

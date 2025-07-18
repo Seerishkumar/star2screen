@@ -1,60 +1,63 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 export async function GET() {
-  const supabase = createServerSupabaseClient()
-
   try {
-    console.log("[/api/banners] Starting banner fetch...")
+    console.log("[/api/banners] Fetching banners...")
 
-    // Try with display_order first
-    let { data, error } = await supabase
+    // Try ordering by display_order first
+    let { data: banners, error } = await supabase
       .from("banners")
       .select("*")
       .eq("is_active", true)
       .order("display_order", { ascending: true })
 
-    // If display_order column doesn't exist, try sort_order
+    // If the column doesn't exist fall back to sort_order
     if (error?.code === "42703") {
-      console.log("[/api/banners] display_order column not found, trying sort_order...")
-      ;({ data, error } = await supabase
+      console.warn("[/api/banners] 'display_order' not found, falling back to 'sort_order'")
+      ;({ data: banners, error } = await supabase
         .from("banners")
         .select("*")
         .eq("is_active", true)
         .order("sort_order", { ascending: true }))
     }
 
-    // If table doesn't exist at all
-    if (error?.code === "42P01") {
-      console.warn("[/api/banners] banners table not found – returning empty array")
+    // …after the second query succeeds (or if no error) add limit
+    if (!error && banners) {
+      banners = banners.slice(0, 5) // cap at 5 client-side
+    }
+
+    if (error) {
+      console.error("[/api/banners] Database error:", error)
+      if (error.code === "42P01") {
+        // Table doesn't exist, return sample data
+        const sampleBanners = [
+          {
+            id: 1,
+            title: "Welcome to Stars2Screen",
+            subtitle: "Connect with the best professionals in the film industry",
+            image_url: "/bustling-film-set.png",
+            link_url: "/profiles",
+            button_text: "Browse Profiles",
+          },
+          {
+            id: 2,
+            title: "Find Your Next Project",
+            subtitle: "Discover amazing opportunities and talented individuals",
+            image_url: "/director-in-discussion.png",
+            link_url: "/jobs",
+            button_text: "View Jobs",
+          },
+        ]
+        return NextResponse.json({ banners: sampleBanners })
+      }
       return NextResponse.json({ banners: [] })
     }
 
-    // Any other error
-    if (error) {
-      console.error("[/api/banners] database error:", error)
-      return NextResponse.json({
-        banners: [],
-        error: error.message,
-        code: error.code,
-        environment: process.env.NODE_ENV,
-      })
-    }
-
-    console.log(`[/api/banners] Successfully fetched ${data?.length || 0} banners`)
-    return NextResponse.json({
-      banners: data || [],
-      count: data?.length || 0,
-      environment: process.env.NODE_ENV,
-      timestamp: new Date().toISOString(),
-    })
-  } catch (err) {
-    console.error("[/api/banners] unexpected error:", err)
-    return NextResponse.json({
-      banners: [],
-      error: "Internal Server Error",
-      details: err instanceof Error ? err.message : "Unknown error",
-      environment: process.env.NODE_ENV,
-    })
+    console.log(`[/api/banners] Found ${banners?.length || 0} banners`)
+    return NextResponse.json({ banners: banners || [] })
+  } catch (error) {
+    console.error("[/api/banners] Unexpected error:", error)
+    return NextResponse.json({ banners: [] })
   }
 }
