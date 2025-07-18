@@ -1,82 +1,137 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-/**
- * Build a **server-side** Supabase client from env vars.
- * Falls back to the public anon key if the Service-Role key is
- * not present (works in local dev as well).
- */
-function getSupabaseServer() {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!url || !key) {
-    throw new Error("Missing Supabase environment variables")
-  }
-
-  return createClient(url, key)
-}
+import { createClient } from "@/lib/supabase"
 
 export async function GET() {
   try {
-    const supabase = getSupabaseServer()
+    console.log("Featured profiles API called")
 
-    /* ------------------------------------------------------------ */
-    /* 1 . Fetch six active profiles (select * to avoid bad columns)*/
-    /* ------------------------------------------------------------ */
-    const { data: rows, error } = await supabase
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error("Missing Supabase environment variables")
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey)
+
+    console.log("Querying author_profiles table...")
+
+    // Get profiles with better filtering
+    const { data: profiles, error: profilesError } = await supabase
       .from("author_profiles")
       .select("*")
-      .eq("is_active", true)
+      .not("full_name", "is", null)
       .order("created_at", { ascending: false })
-      .limit(6)
+      .limit(12)
 
-    if (error) {
-      console.error("[featured] DB error:", error)
-      return NextResponse.json({ error: "Database query failed" }, { status: 500 })
+    if (profilesError) {
+      console.error("Database error:", profilesError)
+      return NextResponse.json(
+        { error: "Failed to fetch featured profiles", details: profilesError.message },
+        { status: 500 },
+      )
     }
 
-    if (!rows || rows.length === 0) {
-      return NextResponse.json([]) // no content is a valid response
+    console.log(`Found ${profiles?.length || 0} profiles`)
+
+    if (!profiles || profiles.length === 0) {
+      console.log("No profiles found in database")
+      return NextResponse.json({ profiles: [] })
     }
 
-    /* ------------------------------------------------------------ */
-    /* 2 . For each profile pick a photo:
-           user_media.is_profile_picture -> avatar_url -> placeholder */
-    /* ------------------------------------------------------------ */
-    const profiles = await Promise.all(
-      rows.map(async (p: Record<string, any>) => {
-        // try to find an uploaded profile-picture
-        const { data: media } = await supabase
+    // Get profile pictures from user_media for each profile
+    const profilesWithImages = await Promise.all(
+      profiles.map(async (profile) => {
+        console.log(`Processing profile: ${profile.full_name} (${profile.user_id})`)
+
+        // Try to get profile picture from user_media - check multiple conditions
+        const { data: profilePictureMedia } = await supabase
           .from("user_media")
-          .select("blob_url, file_url")
-          .eq("user_id", p.user_id)
+          .select("blob_url, file_url, title, media_type")
+          .eq("user_id", profile.user_id)
           .eq("is_profile_picture", true)
+          .eq("media_type", "image")
           .single()
 
-        const image =
-          media?.blob_url ||
-          media?.file_url ||
-          p.avatar_url ||
-          p.profile_picture_url || // if such a column exists
-          "/placeholder.svg?height=400&width=300"
+        // If no specific profile picture, get the first image
+        let fallbackMedia = null
+        if (!profilePictureMedia) {
+          const { data: firstImageMedia } = await supabase
+            .from("user_media")
+            .select("blob_url, file_url, title, media_type")
+            .eq("user_id", profile.user_id)
+            .eq("media_type", "image")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single()
+
+          fallbackMedia = firstImageMedia
+        }
+
+        const mediaFile = profilePictureMedia || fallbackMedia
+
+        // Determine the best image URL to use
+        let profileImageUrl = null
+        if (mediaFile) {
+          profileImageUrl = mediaFile.blob_url || mediaFile.file_url
+          console.log(`Found media for ${profile.full_name}: ${profileImageUrl}`)
+        } else {
+          profileImageUrl = profile.avatar_url
+          console.log(`Using avatar_url for ${profile.full_name}: ${profileImageUrl}`)
+        }
+
+        // Get all media count for this user
+        const { count: mediaCount } = await supabase
+          .from("user_media")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", profile.user_id)
 
         return {
-          id: p.id,
-          name: p.display_name || p.stage_name || p.full_name || "Unknown Professional",
-          image,
-          category: (Array.isArray(p.primary_roles) && p.primary_roles[0]) || p.profession || "Professional",
-          location: p.city || p.location || "—",
-          experience:
-            p.experience_years !== null && p.experience_years !== undefined ? `${p.experience_years} yrs` : "New",
+          id: profile.id || profile.user_id,
+          user_id: profile.user_id,
+          display_name: profile.display_name,
+          stage_name: profile.stage_name,
+          full_name: profile.full_name,
+          bio: profile.bio,
+          city: profile.city,
+          location: profile.location,
+          experience_years: profile.experience_years,
+          primary_roles: profile.primary_roles,
+          profession: profile.profession,
+          avatar_url: profile.avatar_url,
+          profile_picture_url: profileImageUrl,
+          is_verified: profile.is_verified,
+          verified: profile.is_verified || false,
+          created_at: profile.created_at,
+          media_count: mediaCount || 0,
+          has_profile_picture: !!profilePictureMedia,
+          has_fallback_image: !!fallbackMedia,
+          debug_info: {
+            profile_picture_media: profilePictureMedia,
+            fallback_media: fallbackMedia,
+            final_image_url: profileImageUrl,
+          },
         }
       }),
     )
 
-    return NextResponse.json(profiles)
-  } catch (err) {
-    console.error("[featured] Unexpected:", err)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.log("Returning profiles with images:", profilesWithImages.length)
+
+    // Log each profile's image status
+    profilesWithImages.forEach((profile) => {
+      console.log(`${profile.full_name}: image=${!!profile.profile_picture_url}, media_count=${profile.media_count}`)
+    })
+
+    return NextResponse.json({ profiles: profilesWithImages })
+  } catch (error) {
+    console.error("API error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

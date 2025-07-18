@@ -1,24 +1,41 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight } from "lucide-react"
-import { useEffect, useState } from "react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Star, MapPin, Calendar, ChevronLeft, ChevronRight, Eye, Camera } from "lucide-react"
 
-interface Profile {
+interface FeaturedProfile {
   id: string
-  name: string
-  image: string
-  category: string
-  location: string
-  experience: string
+  user_id: string
+  display_name: string | null
+  stage_name: string | null
+  full_name: string | null
+  bio: string | null
+  city: string | null
+  location: string | null
+  experience_years: number | null
+  primary_roles: string[] | null
+  profession: string | null
+  avatar_url: string | null
+  profile_picture_url: string | null
+  is_verified: boolean
+  verified: boolean
+  created_at: string
+  media_count: number
+  has_profile_picture: boolean
+  has_fallback_image: boolean
+  debug_info?: any
 }
 
 export function FeaturedActors() {
-  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [profiles, setProfiles] = useState<FeaturedProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [debugMode, setDebugMode] = useState(false)
 
   useEffect(() => {
     fetchFeaturedProfiles()
@@ -38,41 +55,18 @@ export function FeaturedActors() {
       })
 
       console.log("Response status:", response.status)
-      console.log("Response content-type:", response.headers.get("content-type"))
 
       if (!response.ok) {
         const errorText = await response.text()
         console.error("API Error Response:", errorText)
-
-        let errorMessage = `HTTP ${response.status}`
-        try {
-          const errorData = JSON.parse(errorText)
-          errorMessage = errorData.error || errorData.details || errorMessage
-          console.error("Parsed error:", errorData)
-        } catch (parseError) {
-          console.error("Could not parse error as JSON:", parseError)
-          errorMessage = errorText.substring(0, 200)
-        }
-
-        throw new Error(errorMessage)
-      }
-
-      const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        const responseText = await response.text()
-        console.error("Non-JSON response:", responseText)
-        throw new Error("Server returned non-JSON response")
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log("Successfully fetched profiles:", data)
+      console.log("API Response:", data)
 
-      if (Array.isArray(data)) {
-        setProfiles(data)
-      } else {
-        console.error("Data is not an array:", data)
-        throw new Error("Invalid data format received")
-      }
+      const profilesArray = Array.isArray(data) ? data : data.profiles || []
+      setProfiles(profilesArray)
     } catch (err) {
       console.error("Error fetching featured profiles:", err)
       setError(err instanceof Error ? err.message : "Failed to load featured profiles")
@@ -81,21 +75,69 @@ export function FeaturedActors() {
     }
   }
 
+  const getProfileName = (profile: FeaturedProfile): string => {
+    return profile.display_name || profile.stage_name || profile.full_name || "Unknown Professional"
+  }
+
+  const getProfileImage = (profile: FeaturedProfile): string => {
+    // Priority order: profile_picture_url -> avatar_url -> placeholder
+    const imageUrl = profile.profile_picture_url || profile.avatar_url
+
+    if (imageUrl) {
+      console.log(`Image for ${getProfileName(profile)}: ${imageUrl}`)
+      return imageUrl
+    }
+
+    console.log(`No image for ${getProfileName(profile)}, using placeholder`)
+    return "/placeholder.svg?height=300&width=300"
+  }
+
+  const getProfileCategory = (profile: FeaturedProfile): string => {
+    if (profile.primary_roles && Array.isArray(profile.primary_roles) && profile.primary_roles.length > 0) {
+      return profile.primary_roles[0]
+    }
+    return profile.profession || "Professional"
+  }
+
+  const getProfileLocation = (profile: FeaturedProfile): string => {
+    return profile.city || profile.location || "Location not specified"
+  }
+
+  const getExperienceText = (profile: FeaturedProfile): string => {
+    if (profile.experience_years !== null && profile.experience_years !== undefined) {
+      return `${profile.experience_years} years experience`
+    }
+    return "New to industry"
+  }
+
   if (loading) {
     return (
-      <section className="py-12">
+      <section className="py-12 bg-gray-50">
         <div className="container px-4 md:px-6">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-bold text-primary">Featured Professionals</h2>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0 border-primary text-primary bg-transparent">
+                <ChevronLeft className="h-4 w-4" />
+                <span className="sr-only">Previous</span>
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0 border-primary text-primary bg-transparent">
+                <ChevronRight className="h-4 w-4" />
+                <span className="sr-only">Next</span>
+              </Button>
+            </div>
           </div>
           <p className="text-muted-foreground mb-6">Loading top talent...</p>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="aspect-[3/4] bg-gray-200 rounded-lg mb-4"></div>
-                <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
-              </div>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i} className="animate-pulse overflow-hidden">
+                <div className="h-48 bg-gray-200"></div>
+                <CardContent className="p-4">
+                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-3 bg-gray-200 rounded mb-4"></div>
+                  <div className="h-3 bg-gray-200 rounded"></div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
@@ -105,7 +147,7 @@ export function FeaturedActors() {
 
   if (error) {
     return (
-      <section className="py-12">
+      <section className="py-12 bg-gray-50">
         <div className="container px-4 md:px-6">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-primary mb-4">Featured Professionals</h2>
@@ -131,15 +173,18 @@ export function FeaturedActors() {
 
   if (profiles.length === 0) {
     return (
-      <section className="py-12">
+      <section className="py-12 bg-gray-50">
         <div className="container px-4 md:px-6">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-primary mb-4">Featured Professionals</h2>
-            <p className="text-muted-foreground mb-4">No professionals found.</p>
-            <p className="text-sm text-gray-500">Create some profiles to see them here.</p>
-            <div className="mt-4">
+            <p className="text-muted-foreground mb-4">No featured professionals found.</p>
+            <p className="text-sm text-gray-500 mb-6">Create some profiles to see them here.</p>
+            <div className="mt-4 space-x-2">
               <Button asChild variant="outline">
                 <Link href="/profile/edit">Create Profile</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/profiles">View All Profiles</Link>
               </Button>
             </div>
           </div>
@@ -149,11 +194,14 @@ export function FeaturedActors() {
   }
 
   return (
-    <section className="py-12">
+    <section className="py-12 bg-gray-50">
       <div className="container px-4 md:px-6">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-bold text-primary">Featured Professionals</h2>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDebugMode(!debugMode)} className="text-xs">
+              {debugMode ? "Hide Debug" : "Debug"}
+            </Button>
             <Button variant="outline" size="sm" className="h-8 w-8 p-0 border-primary text-primary bg-transparent">
               <ChevronLeft className="h-4 w-4" />
               <span className="sr-only">Previous</span>
@@ -165,32 +213,116 @@ export function FeaturedActors() {
           </div>
         </div>
         <p className="text-muted-foreground mb-6">Discover top talent across all categories</p>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {profiles.map((profile) => (
-            <Link
-              key={profile.id}
-              href={`/profiles/${profile.id}`}
-              className="group overflow-hidden rounded-lg border bg-white shadow-sm transition-all hover:shadow-md"
-            >
-              <div className="aspect-[3/4] overflow-hidden">
-                <Image
-                  src={profile.image || "/placeholder.svg"}
-                  alt={profile.name}
-                  width={300}
-                  height={400}
-                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                />
-              </div>
-              <div className="p-4">
-                <h3 className="font-medium text-sm">{profile.name}</h3>
-                <p className="text-xs text-muted-foreground">
-                  {profile.category} • {profile.location}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">{profile.experience}</p>
-              </div>
-            </Link>
+            <div key={profile.id}>
+              <Link href={`/profiles/${profile.user_id}`} className="group">
+                <Card className="overflow-hidden border bg-white shadow-sm transition-all hover:shadow-lg group-hover:scale-[1.02]">
+                  {/* Profile Image */}
+                  <div className="relative h-48 overflow-hidden">
+                    <Image
+                      src={getProfileImage(profile) || "/placeholder.svg"}
+                      alt={getProfileName(profile)}
+                      fill
+                      className="object-cover transition-transform group-hover:scale-105"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                      onError={(e) => {
+                        console.error(`Image failed to load for ${getProfileName(profile)}:`, getProfileImage(profile))
+                        const target = e.target as HTMLImageElement
+                        target.src = "/placeholder.svg?height=300&width=300"
+                      }}
+                    />
+
+                    {/* Media Count Badge */}
+                    {profile.media_count > 0 && (
+                      <Badge className="absolute top-2 left-2 bg-green-500 text-white text-xs">
+                        <Camera className="h-3 w-3 mr-1" />
+                        {profile.media_count}
+                      </Badge>
+                    )}
+
+                    {/* Verification Badge */}
+                    {(profile.is_verified || profile.verified) && (
+                      <Badge className="absolute top-2 right-2 bg-blue-500 text-white">
+                        <Star className="h-3 w-3 mr-1 fill-current" />
+                        Verified
+                      </Badge>
+                    )}
+
+                    {/* Category Badge */}
+                    <Badge className="absolute bottom-2 right-2 bg-secondary text-secondary-foreground text-xs">
+                      {getProfileCategory(profile)}
+                    </Badge>
+
+                    {/* Hover Overlay */}
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="text-center text-white">
+                        <Eye className="h-6 w-6 mx-auto mb-1" />
+                        <span className="text-sm font-medium">View Profile</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Profile Info */}
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors line-clamp-1">
+                      {getProfileName(profile)}
+                    </h3>
+
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
+                      <MapPin className="h-3 w-3 flex-shrink-0" />
+                      <span className="line-clamp-1">{getProfileLocation(profile)}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">
+                      <Calendar className="h-3 w-3 flex-shrink-0" />
+                      <span>{getExperienceText(profile)}</span>
+                    </div>
+
+                    {profile.bio && (
+                      <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
+                        {profile.bio.length > 80 ? `${profile.bio.substring(0, 80)}...` : profile.bio}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </Link>
+
+              {/* Debug Info */}
+              {debugMode && (
+                <div className="mt-2 p-2 bg-gray-100 rounded text-xs">
+                  <p>
+                    <strong>User ID:</strong> {profile.user_id}
+                  </p>
+                  <p>
+                    <strong>Media Count:</strong> {profile.media_count}
+                  </p>
+                  <p>
+                    <strong>Has Profile Picture:</strong> {profile.has_profile_picture ? "Yes" : "No"}
+                  </p>
+                  <p>
+                    <strong>Has Fallback Image:</strong> {profile.has_fallback_image ? "Yes" : "No"}
+                  </p>
+                  <p>
+                    <strong>Image URL:</strong> {profile.profile_picture_url || "None"}
+                  </p>
+                  <p>
+                    <strong>Avatar URL:</strong> {profile.avatar_url || "None"}
+                  </p>
+                  <div className="mt-1">
+                    <Button asChild variant="outline" size="sm" className="text-xs bg-transparent">
+                      <a href={`/api/debug/profile/${profile.user_id}`} target="_blank" rel="noreferrer">
+                        Debug Profile
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           ))}
         </div>
+
         <div className="mt-8 text-center">
           <Button
             asChild

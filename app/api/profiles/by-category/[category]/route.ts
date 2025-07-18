@@ -1,109 +1,59 @@
-import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase"
 
 export async function GET(request: Request, { params }: { params: { category: string } }) {
   try {
-    const { searchParams } = new URL(request.url)
-    const page = Number.parseInt(searchParams.get("page") || "1")
-    const limit = 20
-    const offset = (page - 1) * limit
-    const search = searchParams.get("search") || ""
-    const location = searchParams.get("location") || ""
-    const experience = searchParams.get("experience") || ""
+    const { category } = params
+    console.log("Fetching profiles for category:", category)
 
-    const supabase = createClient()
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-    // Format category name (e.g., "actors" -> "actor")
-    const profession = params.category.endsWith("s") ? params.category.slice(0, -1) : params.category
-
-    let query = supabase
-      .from("author_profiles")
-      .select(
-        `
-        id,
-        user_id,
-        full_name,
-        profession,
-        location,
-        profile_image_url,
-        bio,
-        experience_years,
-        height,
-        weight,
-        skills,
-        created_at,
-        user_media!left(
-          id,
-          file_url,
-          file_type,
-          is_profile_picture
-        )
-      `,
-        { count: "exact" },
-      )
-      .eq("is_active", true)
-      .ilike("profession", `%${profession}%`)
-
-    // Apply filters
-    if (search) {
-      query = query.or(`full_name.ilike.%${search}%,bio.ilike.%${search}%,skills.ilike.%${search}%`)
+    if (!supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
     }
 
-    if (location) {
-      query = query.ilike("location", `%${location}%`)
+    const supabase = createClient(supabaseUrl, serviceRoleKey)
+
+    // Query author_profiles only, no joins to avoid relationship errors
+    let query = supabase.from("author_profiles").select("*").order("created_at", { ascending: false }).limit(20)
+
+    // Filter by category in primary_roles array
+    if (category && category !== "all") {
+      query = query.contains("primary_roles", [category])
     }
 
-    if (experience) {
-      const [min, max] = experience.split("-").map(Number)
-      if (max) {
-        query = query.gte("experience_years", min).lte("experience_years", max)
-      } else if (experience === "10+") {
-        query = query.gte("experience_years", 10)
-      }
-    }
-
-    const {
-      data: profiles,
-      error,
-      count,
-    } = await query.range(offset, offset + limit - 1).order("created_at", { ascending: false })
+    const { data: profiles, error } = await query
 
     if (error) {
-      console.error("Error fetching profiles by category:", error)
-      return NextResponse.json({ error: "Failed to fetch profiles" }, { status: 500 })
+      console.error("Database error:", error)
+      return NextResponse.json({ error: "Failed to fetch profiles", details: error.message }, { status: 500 })
     }
 
-    // Format the data for frontend
-    const formattedProfiles =
-      profiles?.map((profile) => ({
-        id: profile.id,
-        name: profile.full_name || "Unknown",
-        image:
-          profile.profile_image_url ||
-          profile.user_media?.find((m) => m.is_profile_picture)?.file_url ||
-          "/placeholder.svg?height=400&width=300",
-        category: profile.profession || "Professional",
-        location: profile.location || "Location not specified",
-        experience: profile.experience_years ? `${profile.experience_years}+ years` : "Experience not specified",
-        bio: profile.bio,
-        skills: profile.skills,
-        height: profile.height,
-        weight: profile.weight,
-        rating: 4.5 + Math.random() * 0.5, // Temporary until we implement real ratings
-        reviewCount: Math.floor(Math.random() * 50) + 5, // Temporary
-      })) || []
+    console.log(`Found ${profiles?.length || 0} profiles for category: ${category}`)
 
-    return NextResponse.json({
-      profiles: formattedProfiles,
-      pagination: {
-        page,
-        limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
-      },
-    })
+    // Transform data to match expected frontend format
+    const transformedProfiles = (profiles || []).map((profile) => ({
+      id: profile.id || profile.user_id,
+      full_name: profile.display_name || profile.stage_name || profile.full_name || "Unknown Professional",
+      category: profile.primary_roles?.[0] || profile.profession || category,
+      location: profile.city || profile.location || "Location not specified",
+      experience_years: profile.experience_years || 0,
+      bio: profile.bio || "No bio available",
+      profile_image_url: profile.avatar_url || profile.profile_picture_url || null,
+      rating: profile.average_rating || null,
+      verified: profile.is_verified || false,
+    }))
+
+    return NextResponse.json({ profiles: transformedProfiles })
   } catch (error) {
-    console.error("Error in category profiles API:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("API error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

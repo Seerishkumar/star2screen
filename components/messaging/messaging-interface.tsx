@@ -10,8 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, Phone, Video, MoreVertical } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
+import { Send, Phone, Video, MoreVertical, Smile } from "lucide-react"
 
 interface Message {
   id: string
@@ -42,6 +41,7 @@ export function MessagingInterface({ recipientId, recipientName, recipientAvatar
   const [conversation, setConversation] = useState<Conversation | null>(null)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [isOnline, setIsOnline] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -62,6 +62,8 @@ export function MessagingInterface({ recipientId, recipientName, recipientAvatar
     if (!user) return
 
     try {
+      setLoading(true)
+
       // Find or create conversation
       let { data: existingConversation } = await supabase
         .from("conversations")
@@ -78,6 +80,7 @@ export function MessagingInterface({ recipientId, recipientName, recipientAvatar
           .insert({
             participant_1: user.id,
             participant_2: recipientId,
+            last_message_at: new Date().toISOString(),
           })
           .select()
           .single()
@@ -101,10 +104,15 @@ export function MessagingInterface({ recipientId, recipientName, recipientAvatar
             filter: `conversation_id=eq.${existingConversation.id}`,
           },
           (payload) => {
-            setMessages((prev) => [...prev, payload.new as Message])
+            const newMessage = payload.new as Message
+            setMessages((prev) => [...prev, newMessage])
+            scrollToBottom()
           },
         )
         .subscribe()
+
+      // Simulate online status (in real app, you'd track this properly)
+      setIsOnline(Math.random() > 0.5)
 
       return () => {
         supabase.removeChannel(channel)
@@ -148,6 +156,7 @@ export function MessagingInterface({ recipientId, recipientName, recipientAvatar
         sender_id: user.id,
         content: newMessage.trim(),
         message_type: "text",
+        is_read: false,
       })
 
       if (error) throw error
@@ -161,6 +170,7 @@ export function MessagingInterface({ recipientId, recipientName, recipientAvatar
       setNewMessage("")
     } catch (error) {
       console.error("Error sending message:", error)
+      alert("Failed to send message. Please try again.")
     } finally {
       setSending(false)
     }
@@ -170,6 +180,18 @@ export function MessagingInterface({ recipientId, recipientName, recipientAvatar
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
+    }
+  }
+
+  const formatMessageTime = (timestamp: string) => {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+
+    if (diffInHours < 24) {
+      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    } else {
+      return date.toLocaleDateString([], { month: "short", day: "numeric" })
     }
   }
 
@@ -189,23 +211,28 @@ export function MessagingInterface({ recipientId, recipientName, recipientAvatar
       {/* Header */}
       <CardHeader className="flex-row items-center space-y-0 pb-4 border-b">
         <div className="flex items-center space-x-3 flex-1">
-          <Avatar>
-            <AvatarImage src={recipientAvatar || "/placeholder.svg"} />
-            <AvatarFallback>{recipientName.charAt(0).toUpperCase()}</AvatarFallback>
-          </Avatar>
+          <div className="relative">
+            <Avatar>
+              <AvatarImage src={recipientAvatar || "/placeholder.svg"} />
+              <AvatarFallback>{recipientName.charAt(0).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            {isOnline && (
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+            )}
+          </div>
           <div>
             <CardTitle className="text-lg">{recipientName}</CardTitle>
-            <p className="text-sm text-muted-foreground">Online</p>
+            <p className="text-sm text-muted-foreground">{isOnline ? "Online" : "Last seen recently"}</p>
           </div>
         </div>
         <div className="flex space-x-2">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" title="Voice call">
             <Phone className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" title="Video call">
             <Video className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" title="More options">
             <MoreVertical className="h-4 w-4" />
           </Button>
         </div>
@@ -215,25 +242,52 @@ export function MessagingInterface({ recipientId, recipientName, recipientAvatar
       <CardContent className="flex-1 p-0">
         <ScrollArea className="h-full p-4">
           <div className="space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.sender_id === user?.id ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[70%] rounded-lg px-3 py-2 ${
-                    message.sender_id === user?.id
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  <p className="text-sm">{message.content}</p>
-                  <p className="text-xs opacity-70 mt-1">
-                    {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
-                  </p>
-                </div>
+            {messages.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">No messages yet. Start the conversation!</p>
               </div>
-            ))}
+            ) : (
+              messages.map((message, index) => {
+                const isOwnMessage = message.sender_id === user?.id
+                const showAvatar = index === 0 || messages[index - 1].sender_id !== message.sender_id
+                const showTime =
+                  index === messages.length - 1 ||
+                  new Date(messages[index + 1].created_at).getTime() - new Date(message.created_at).getTime() > 300000 // 5 minutes
+
+                return (
+                  <div key={message.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`flex items-end space-x-2 max-w-[70%] ${isOwnMessage ? "flex-row-reverse space-x-reverse" : ""}`}
+                    >
+                      {!isOwnMessage && showAvatar && (
+                        <Avatar className="w-6 h-6">
+                          <AvatarImage src={recipientAvatar || "/placeholder.svg"} />
+                          <AvatarFallback className="text-xs">{recipientName.charAt(0).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                      )}
+                      {!isOwnMessage && !showAvatar && <div className="w-6" />}
+
+                      <div
+                        className={`rounded-lg px-3 py-2 ${
+                          isOwnMessage ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                        {showTime && (
+                          <p
+                            className={`text-xs mt-1 ${
+                              isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground/70"
+                            }`}
+                          >
+                            {formatMessageTime(message.created_at)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
@@ -242,17 +296,26 @@ export function MessagingInterface({ recipientId, recipientName, recipientAvatar
       {/* Message Input */}
       <div className="p-4 border-t">
         <div className="flex space-x-2">
+          <Button variant="ghost" size="sm" className="px-2">
+            <Smile className="h-4 w-4" />
+          </Button>
           <Input
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Type a message..."
             className="flex-1"
+            disabled={sending}
           />
-          <Button onClick={sendMessage} disabled={!newMessage.trim() || sending}>
-            <Send className="h-4 w-4" />
+          <Button onClick={sendMessage} disabled={!newMessage.trim() || sending} size="sm">
+            {sending ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground mt-2">Press Enter to send, Shift+Enter for new line</p>
       </div>
     </Card>
   )

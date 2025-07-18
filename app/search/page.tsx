@@ -25,7 +25,6 @@ interface Profile {
   avatar_url: string | null
   profile_picture_url: string | null
   is_verified: boolean
-  created_at: string
 }
 
 const categories = [
@@ -43,30 +42,30 @@ const categories = [
   "Dubbing Artist",
 ]
 
-export default function ProfilesPage() {
+export default function SearchPage() {
   const searchParams = useSearchParams()
   const [profiles, setProfiles] = useState<Profile[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Search and filter states
-  const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "")
-  const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "All Categories")
-  const [selectedLocation, setSelectedLocation] = useState(searchParams.get("location") || "")
+  // Search states
+  const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "")
+  const [selectedCategory, setSelectedCategory] = useState("All Categories")
+  const [selectedLocation, setSelectedLocation] = useState("")
 
-  useEffect(() => {
-    fetchProfiles()
-  }, [searchParams.toString()])
+  const handleSearch = async () => {
+    if (!searchTerm.trim() && selectedCategory === "All Categories" && !selectedLocation.trim()) {
+      return
+    }
 
-  const fetchProfiles = async () => {
     try {
       setLoading(true)
       setError(null)
 
       const params = new URLSearchParams()
-      if (searchTerm) params.append("search", searchTerm)
+      if (searchTerm.trim()) params.append("search", searchTerm.trim())
       if (selectedCategory && selectedCategory !== "All Categories") params.append("category", selectedCategory)
-      if (selectedLocation) params.append("location", selectedLocation)
+      if (selectedLocation.trim()) params.append("location", selectedLocation.trim())
 
       const response = await fetch(`/api/profiles/all?${params.toString()}`)
 
@@ -77,22 +76,20 @@ export default function ProfilesPage() {
       const data = await response.json()
       setProfiles(Array.isArray(data) ? data : data.profiles || [])
     } catch (err) {
-      console.error("Error fetching profiles:", err)
-      setError(err instanceof Error ? err.message : "Failed to load profiles")
+      console.error("Error searching profiles:", err)
+      setError(err instanceof Error ? err.message : "Failed to search profiles")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSearch = () => {
-    const params = new URLSearchParams()
-    if (searchTerm) params.append("search", searchTerm)
-    if (selectedCategory && selectedCategory !== "All Categories") params.append("category", selectedCategory)
-    if (selectedLocation) params.append("location", selectedLocation)
-
-    window.history.pushState({}, "", `/profiles?${params.toString()}`)
-    fetchProfiles()
-  }
+  // Auto-search on initial load if there are search params
+  useEffect(() => {
+    const initialSearch = searchParams.get("q")
+    if (initialSearch) {
+      handleSearch()
+    }
+  }, [])
 
   const getProfileName = (profile: Profile): string => {
     return profile.display_name || profile.stage_name || profile.full_name || "Unknown Professional"
@@ -120,58 +117,13 @@ export default function ProfilesPage() {
     return "New to industry"
   }
 
-  if (loading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-4">All Professionals</h1>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
-            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
-            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
-            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {[...Array(8)].map((_, i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-4"></div>
-                <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded mb-4"></div>
-                <div className="h-3 bg-gray-200 rounded"></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-primary mb-4">All Professionals</h1>
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
-            <p className="text-red-600 font-medium mb-2">Error loading profiles</p>
-            <p className="text-red-500 text-sm mb-4">{error}</p>
-            <Button onClick={fetchProfiles} variant="outline">
-              Try Again
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-primary mb-4">All Professionals</h1>
-        <p className="text-muted-foreground mb-6">Discover talented professionals in the film industry</p>
+        <h1 className="text-3xl font-bold text-primary mb-4">Find Talent</h1>
+        <p className="text-muted-foreground mb-6">Search for professionals in the film industry</p>
 
-        {/* Search and Filter Controls */}
+        {/* Search Form */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -204,35 +156,50 @@ export default function ProfilesPage() {
             onKeyPress={(e) => e.key === "Enter" && handleSearch()}
           />
 
-          <Button onClick={handleSearch} className="w-full">
-            Search
+          <Button onClick={handleSearch} className="w-full" disabled={loading}>
+            {loading ? "Searching..." : "Search"}
           </Button>
         </div>
       </div>
 
       {/* Results */}
-      {profiles.length === 0 ? (
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <p className="text-red-600 font-medium">Error searching profiles:</p>
+          <p className="text-red-500 text-sm">{error}</p>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-6">
+                <div className="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-4"></div>
+                <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded mb-4"></div>
+                <div className="h-3 bg-gray-200 rounded"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : profiles.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-muted-foreground text-lg mb-4">No professionals found matching your criteria.</p>
-          <p className="text-sm text-gray-500 mb-6">Try adjusting your search filters or browse all categories.</p>
-          <Button
-            onClick={() => {
-              setSearchTerm("")
-              setSelectedCategory("All Categories")
-              setSelectedLocation("")
-              window.history.pushState({}, "", "/profiles")
-              fetchProfiles()
-            }}
-            variant="outline"
-          >
-            Clear Filters
+          <p className="text-muted-foreground text-lg mb-4">
+            {searchTerm || selectedCategory !== "All Categories" || selectedLocation
+              ? "No professionals found matching your search criteria."
+              : "Enter search terms to find professionals."}
+          </p>
+          <p className="text-sm text-gray-500 mb-6">Try different keywords or browse all categories.</p>
+          <Button asChild variant="outline">
+            <Link href="/profiles">Browse All Professionals</Link>
           </Button>
         </div>
       ) : (
         <>
           <div className="mb-6">
             <p className="text-sm text-muted-foreground">
-              Showing {profiles.length} professional{profiles.length !== 1 ? "s" : ""}
+              Found {profiles.length} professional{profiles.length !== 1 ? "s" : ""}
             </p>
           </div>
 

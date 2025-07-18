@@ -7,12 +7,40 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Users, Building, MessageSquare, Flag, MoreHorizontal, CheckCircle, XCircle, Eye } from "lucide-react"
+import {
+  Users,
+  Building,
+  MessageSquare,
+  Flag,
+  MoreHorizontal,
+  CheckCircle,
+  XCircle,
+  Eye,
+  ImageIcon,
+  Video,
+  FileText,
+  Megaphone,
+} from "lucide-react"
+import { BannerManagement } from "@/components/admin/banner-management"
+import { AdsManagement } from "@/components/admin/ads-management"
+import { ArticleManagement } from "@/components/admin/article-management"
+import { VideoManagement } from "@/components/admin/video-management"
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState("profiles")
+  const [activeTab, setActiveTab] = useState("overview")
 
-  // Mock data
+  // Mock data for overview
+  const stats = {
+    totalUsers: 1248,
+    totalServices: 324,
+    pendingApprovals: 5,
+    reportedContent: 2,
+    totalBanners: 5,
+    totalAds: 12,
+    totalArticles: 28,
+    totalVideos: 15,
+  }
+
   const pendingProfiles = [
     {
       id: 1,
@@ -20,7 +48,7 @@ export default function AdminDashboard() {
       type: "Actor",
       email: "rahul@example.com",
       date: "2024-04-10",
-      image: "/placeholder.svg?height=40&width=40&query=man headshot",
+      image: "/placeholder.svg?height=40&width=40",
     },
     {
       id: 2,
@@ -28,7 +56,7 @@ export default function AdminDashboard() {
       type: "Director",
       email: "sneha@example.com",
       date: "2024-04-09",
-      image: "/placeholder.svg?height=40&width=40&query=woman headshot",
+      image: "/placeholder.svg?height=40&width=40",
     },
     {
       id: 3,
@@ -36,7 +64,7 @@ export default function AdminDashboard() {
       type: "Cinematographer",
       email: "arjun@example.com",
       date: "2024-04-08",
-      image: "/placeholder.svg?height=40&width=40&query=man with camera headshot",
+      image: "/placeholder.svg?height=40&width=40",
     },
   ]
 
@@ -76,64 +104,141 @@ export default function AdminDashboard() {
     <div className="container px-4 py-8 md:px-6 md:py-12">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-        <p className="text-muted-foreground">Manage profiles, services, and reported content</p>
+        <p className="text-muted-foreground">Manage profiles, services, content, and home page sections</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">1,248</div>
-            <p className="text-xs text-muted-foreground">+12% from last month</p>
-          </CardContent>
-        </Card>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-6 grid w-full grid-cols-3 lg:grid-cols-6">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="banners">
+            <ImageIcon className="h-4 w-4 mr-2" />
+            Banners
+          </TabsTrigger>
+          <TabsTrigger value="ads">
+            <Megaphone className="h-4 w-4 mr-2" />
+            Promotions
+          </TabsTrigger>
+          <TabsTrigger value="articles">
+            <FileText className="h-4 w-4 mr-2" />
+            Articles
+          </TabsTrigger>
+          <TabsTrigger value="videos">
+            <Video className="h-4 w-4 mr-2" />
+            Videos
+          </TabsTrigger>
+          <TabsTrigger value="moderation">Moderation</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Services</CardTitle>
-            <Building className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">324</div>
-            <p className="text-xs text-muted-foreground">+5% from last month</p>
-          </CardContent>
-        </Card>
+        <TabsContent value="overview">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalUsers.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground">+12% from last month</p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Approvals</CardTitle>
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">5</div>
-            <p className="text-xs text-muted-foreground">-2 from yesterday</p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Services</CardTitle>
+                <Building className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalServices}</div>
+                <p className="text-xs text-muted-foreground">+5% from last month</p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Reported Content</CardTitle>
-            <Flag className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">2</div>
-            <p className="text-xs text-muted-foreground">+1 from yesterday</p>
-          </CardContent>
-        </Card>
-      </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Banners</CardTitle>
+                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalBanners}</div>
+                <p className="text-xs text-muted-foreground">Homepage carousel</p>
+              </CardContent>
+            </Card>
 
-      <div className="mt-8">
-        <Tabs defaultValue="profiles" onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="profiles">Pending Profiles</TabsTrigger>
-            <TabsTrigger value="services">Pending Services</TabsTrigger>
-            <TabsTrigger value="reports">Reported Content</TabsTrigger>
-          </TabsList>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Promotions</CardTitle>
+                <Megaphone className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalAds}</div>
+                <p className="text-xs text-muted-foreground">Active advertisements</p>
+              </CardContent>
+            </Card>
 
-          <TabsContent value="profiles">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Articles</CardTitle>
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalArticles}</div>
+                <p className="text-xs text-muted-foreground">Published content</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Videos</CardTitle>
+                <Video className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalVideos}</div>
+                <p className="text-xs text-muted-foreground">Featured videos</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending Approvals</CardTitle>
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.pendingApprovals}</div>
+                <p className="text-xs text-muted-foreground">-2 from yesterday</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Reported Content</CardTitle>
+                <Flag className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.reportedContent}</div>
+                <p className="text-xs text-muted-foreground">+1 from yesterday</p>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="banners">
+          <BannerManagement />
+        </TabsContent>
+
+        <TabsContent value="ads">
+          <AdsManagement />
+        </TabsContent>
+
+        <TabsContent value="articles">
+          <ArticleManagement />
+        </TabsContent>
+
+        <TabsContent value="videos">
+          <VideoManagement />
+        </TabsContent>
+
+        <TabsContent value="moderation">
+          <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Pending Profile Approvals</CardTitle>
@@ -200,9 +305,7 @@ export default function AdminDashboard() {
                 </Table>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          <TabsContent value="services">
             <Card>
               <CardHeader>
                 <CardTitle>Pending Service Approvals</CardTitle>
@@ -256,9 +359,7 @@ export default function AdminDashboard() {
                 </Table>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          <TabsContent value="reports">
             <Card>
               <CardHeader>
                 <CardTitle>Reported Content</CardTitle>
@@ -310,9 +411,9 @@ export default function AdminDashboard() {
                 </Table>
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

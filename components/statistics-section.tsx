@@ -1,25 +1,81 @@
+"use client"
+
+import { useState, useEffect } from "react"
+
+interface Statistics {
+  totalProfiles: number
+  totalCategories: number
+  totalArticles: number
+  totalJobs: number
+}
+
 export function StatisticsSection() {
-  const stats = [
-    { value: "700,000+", label: "Buyers Associated", color: "bg-accent-blue" },
-    { value: "250,000+", label: "Sellers Associated", color: "bg-accent-green" },
-    { value: "425+", label: "Developer Partnered", color: "bg-accent-purple" },
-    { value: "200+", label: "Companies Partnered", color: "bg-accent-red" },
-    { value: "5,720+", label: "Support Empowered", color: "bg-accent-gold" },
-  ]
+  const [stats, setStats] = useState<Statistics>({
+    totalProfiles: 0,
+    totalCategories: 0,
+    totalArticles: 0,
+    totalJobs: 0,
+  })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchStatistics()
+  }, [])
+
+  const fetchStatistics = async () => {
+    try {
+      // For now, we'll use mock data since we don't have a statistics API
+      // In a real app, you'd fetch from /api/statistics
+      setStats({
+        totalProfiles: 1250,
+        totalCategories: 28,
+        totalArticles: 156,
+        totalJobs: 89,
+      })
+    } catch (error) {
+      console.error("Error fetching statistics:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <section className="py-12 bg-primary text-white">
+        <div className="container px-4 md:px-6">
+          <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="text-center animate-pulse">
+                <div className="h-8 bg-white/20 rounded mb-2"></div>
+                <div className="h-4 bg-white/20 rounded"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
 
   return (
-    <section className="bg-white py-12">
+    <section className="py-12 bg-primary text-white">
       <div className="container px-4 md:px-6">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-5 md:gap-8">
-          {stats.map((stat, index) => (
-            <div key={index} className="flex flex-col items-center justify-center text-center">
-              <div className={`${stat.color} text-white rounded-full w-16 h-16 flex items-center justify-center mb-3`}>
-                <span className="text-xl font-bold">{stat.value.split("+")[0].slice(-2)}</span>
-              </div>
-              <div className="text-2xl font-bold md:text-3xl text-primary">{stat.value}</div>
-              <div className="text-sm text-muted-foreground">{stat.label}</div>
-            </div>
-          ))}
+        <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+          <div className="text-center">
+            <div className="text-3xl font-bold text-accent-gold mb-2">{stats.totalProfiles.toLocaleString()}+</div>
+            <div className="text-sm text-gray-200">Registered Professionals</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-accent-gold mb-2">{stats.totalCategories}+</div>
+            <div className="text-sm text-gray-200">Categories</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-accent-gold mb-2">{stats.totalArticles}+</div>
+            <div className="text-sm text-gray-200">Articles & News</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-accent-gold mb-2">{stats.totalJobs}+</div>
+            <div className="text-sm text-gray-200">Active Jobs</div>
+          </div>
         </div>
       </div>
     </section>

@@ -26,6 +26,7 @@ import {
   AlertCircle,
   CheckCircle,
   Info,
+  User,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
@@ -371,6 +372,18 @@ export function BlobMediaUpload() {
         })),
       )
 
+      // Also update the author_profiles table with the new profile picture URL
+      const selectedMedia = mediaFiles.find((m) => m.id === mediaId)
+      if (selectedMedia) {
+        await supabase
+          .from("author_profiles")
+          .update({
+            avatar_url: selectedMedia.blob_url || selectedMedia.file_url,
+            profile_picture_url: selectedMedia.blob_url || selectedMedia.file_url,
+          })
+          .eq("user_id", user.id)
+      }
+
       alert("Profile picture updated!")
     } catch (error) {
       console.error("Error setting profile picture:", error)
@@ -474,6 +487,8 @@ export function BlobMediaUpload() {
     uploadStatuses.length > 0
       ? uploadStatuses.reduce((sum, status) => sum + status.progress, 0) / uploadStatuses.length
       : 0
+
+  const currentProfilePicture = mediaFiles.find((m) => m.is_profile_picture)
 
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -736,7 +751,7 @@ export function BlobMediaUpload() {
                       <div className="aspect-square rounded-lg overflow-hidden bg-muted">
                         {media.media_type === "image" ? (
                           <img
-                            src={media.file_url || "/placeholder.svg"}
+                            src={media.blob_url || media.file_url || "/placeholder.svg"}
                             alt={media.title}
                             className="w-full h-full object-cover"
                           />
@@ -760,7 +775,7 @@ export function BlobMediaUpload() {
 
                         {media.media_type === "image" && (
                           <Button size="sm" variant="secondary" onClick={() => setAsProfilePicture(media.id!)}>
-                            <Camera className="h-4 w-4" />
+                            <User className="h-4 w-4" />
                           </Button>
                         )}
 
@@ -779,7 +794,7 @@ export function BlobMediaUpload() {
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center space-x-1">
                             {media.is_featured && <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />}
-                            {media.is_profile_picture && <Camera className="h-3 w-3" />}
+                            {media.is_profile_picture && <User className="h-3 w-3 text-blue-500" />}
                           </div>
                         </div>
                         {media.tags.length > 0 && (
@@ -815,9 +830,9 @@ export function BlobMediaUpload() {
                 {/* Current Profile Picture */}
                 <div className="relative">
                   <div className="h-32 w-32 rounded-full overflow-hidden border-4 border-primary">
-                    {mediaFiles.find((m) => m.is_profile_picture) ? (
+                    {currentProfilePicture ? (
                       <img
-                        src={mediaFiles.find((m) => m.is_profile_picture)?.file_url || "/placeholder.svg"}
+                        src={currentProfilePicture.blob_url || currentProfilePicture.file_url || "/placeholder.svg"}
                         alt="Profile"
                         className="w-full h-full object-cover"
                       />
@@ -827,6 +842,11 @@ export function BlobMediaUpload() {
                       </div>
                     )}
                   </div>
+                  {currentProfilePicture && (
+                    <div className="absolute -bottom-2 -right-2 bg-blue-500 rounded-full p-2">
+                      <User className="h-4 w-4 text-white" />
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-center">
@@ -844,15 +864,20 @@ export function BlobMediaUpload() {
                           onClick={() => setAsProfilePicture(media.id!)}
                           className={`aspect-square rounded-lg overflow-hidden border-2 transition-colors ${
                             media.is_profile_picture
-                              ? "border-primary"
+                              ? "border-primary ring-2 ring-primary/20"
                               : "border-transparent hover:border-muted-foreground"
                           }`}
                         >
                           <img
-                            src={media.file_url || "/placeholder.svg"}
+                            src={media.blob_url || media.file_url || "/placeholder.svg"}
                             alt={media.title}
                             className="w-full h-full object-cover"
                           />
+                          {media.is_profile_picture && (
+                            <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                              <User className="h-4 w-4 text-primary" />
+                            </div>
+                          )}
                         </button>
                       ))}
                   </div>
