@@ -42,6 +42,9 @@ export function Navbar() {
           <Link href="/reviews" className="text-sm font-medium hover:text-primary">
             Reviews
           </Link>
+          <Link href="/messages" className="text-sm font-medium hover:text-primary">
+            Messages
+          </Link>
         </nav>
 
         <div className="hidden md:flex items-center gap-2">
@@ -73,6 +76,9 @@ export function Navbar() {
             </Link>
             <Link href="/reviews" className="text-sm font-medium hover:text-primary">
               Reviews
+            </Link>
+            <Link href="/messages" className="text-sm font-medium hover:text-primary">
+              Messages
             </Link>
             <div className="pt-2">
               <UserMenu />

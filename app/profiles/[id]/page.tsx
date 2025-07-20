@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { MapPin, Calendar, Star, Phone, Mail, Globe, User, Camera, MessageCircle, Share2, Heart } from "lucide-react"
+import { MessageButton } from "@/components/messaging/message-button"
+import { MapPin, Calendar, Star, Phone, Mail, Globe, User, Camera, Share2, Heart } from "lucide-react"
 
 interface ProfilePageProps {
   params: {
@@ -126,10 +127,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
 
           {/* Action Buttons */}
           <div className="ml-auto pb-4 flex gap-2">
-            <Button variant="secondary" size="sm">
-              <MessageCircle className="h-4 w-4 mr-2" />
-              Message
-            </Button>
+            <MessageButton recipientId={profile.user_id} recipientName={displayName} variant="secondary" size="sm" />
             <Button variant="secondary" size="sm">
               <Heart className="h-4 w-4 mr-2" />
               Save
@@ -254,8 +252,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                 )}
                 {profile.hourly_rate && (
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Hourly Rate</span>
-                    <p>${profile.hourly_rate}</p>
+                    <span className="text-sm font-medium text-muted-foreground">Daily Rate</span>
+                    <p>₹{profile.hourly_rate.toLocaleString()}</p>
                   </div>
                 )}
                 <Separator />
@@ -265,7 +263,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                 </div>
                 <div>
                   <span className="text-sm font-medium text-muted-foreground">Profile Views</span>
-                  <p>0</p>
+                  <p>{profile.profile_views || 0}</p>
                 </div>
               </CardContent>
             </Card>
@@ -276,10 +274,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <Button className="w-full">
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  Send Message
-                </Button>
+                <MessageButton recipientId={profile.user_id} recipientName={displayName} className="w-full" />
                 <Button variant="outline" className="w-full bg-transparent">
                   <Heart className="h-4 w-4 mr-2" />
                   Add to Favorites
