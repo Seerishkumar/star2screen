@@ -26,7 +26,7 @@ export function BannerCarousel({ banners = [] }: BannerCarouselProps) {
   const validBanners = banners.filter((banner) => banner && banner.image_url)
 
   console.log("[BannerCarousel] Received banners:", banners)
-  console.log("[BannerCarousel] Valid banners:", validBanners)
+  console.log("[BannerCarousel] Valid banners count:", validBanners.length)
 
   useEffect(() => {
     if (validBanners.length <= 1) return
@@ -56,7 +56,7 @@ export function BannerCarousel({ banners = [] }: BannerCarouselProps) {
   }
 
   const currentBanner = validBanners[currentIndex]
-  console.log("[BannerCarousel] Current banner:", currentBanner)
+  console.log("[BannerCarousel] Displaying banner:", currentBanner)
 
   const goToPrevious = () => {
     setCurrentIndex((prevIndex) => (prevIndex - 1 + validBanners.length) % validBanners.length)

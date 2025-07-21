@@ -1,26 +1,77 @@
--- Fix the news table by adding the missing is_featured column
-ALTER TABLE news ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT false;
+-- Fix news table by adding missing columns and ensuring proper structure
+DO $$ 
+BEGIN
+    -- Add is_featured column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'news' AND column_name = 'is_featured'
+    ) THEN
+        ALTER TABLE news ADD COLUMN is_featured BOOLEAN DEFAULT false;
+        RAISE NOTICE 'Added is_featured column to news table';
+    END IF;
 
--- Update some existing news items to be featured
-UPDATE news SET is_featured = true WHERE id IN (
-  SELECT id FROM news ORDER BY published_at DESC LIMIT 3
-);
+    -- Add status column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'news' AND column_name = 'status'
+    ) THEN
+        ALTER TABLE news ADD COLUMN status VARCHAR(20) DEFAULT 'published';
+        RAISE NOTICE 'Added status column to news table';
+    END IF;
 
--- Ensure the table has proper indexes
-CREATE INDEX IF NOT EXISTS idx_news_featured ON news(is_featured);
-CREATE INDEX IF NOT EXISTS idx_news_published_at ON news(published_at DESC);
-CREATE INDEX IF NOT EXISTS idx_news_category ON news(category);
+    -- Add published_at column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'news' AND column_name = 'published_at'
+    ) THEN
+        ALTER TABLE news ADD COLUMN published_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+        RAISE NOTICE 'Added published_at column to news table';
+    END IF;
 
--- Make sure RLS is properly configured
-ALTER TABLE news ENABLE ROW LEVEL SECURITY;
+    -- Add author_name column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'news' AND column_name = 'author_name'
+    ) THEN
+        ALTER TABLE news ADD COLUMN author_name VARCHAR(255);
+        RAISE NOTICE 'Added author_name column to news table';
+    END IF;
 
--- Drop existing policies if they exist
+    -- Add featured_image_url column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'news' AND column_name = 'featured_image_url'
+    ) THEN
+        ALTER TABLE news ADD COLUMN featured_image_url TEXT;
+        RAISE NOTICE 'Added featured_image_url column to news table';
+    END IF;
+
+    -- Add excerpt column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'news' AND column_name = 'excerpt'
+    ) THEN
+        ALTER TABLE news ADD COLUMN excerpt TEXT;
+        RAISE NOTICE 'Added excerpt column to news table';
+    END IF;
+END $$;
+
+-- Update existing records to have proper values
+UPDATE news SET 
+    status = 'published' WHERE status IS NULL,
+    published_at = NOW() WHERE published_at IS NULL,
+    is_featured = true WHERE is_featured IS NULL;
+
+-- Create index for better performance
+CREATE INDEX IF NOT EXISTS idx_news_status_published ON news(status, published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_news_featured ON news(is_featured, published_at DESC);
+
+-- Ensure RLS policy allows public read access
 DROP POLICY IF EXISTS "Allow public read access to news" ON news;
-
--- Create permissive policy for public read access
-CREATE POLICY "Allow public read access to news" ON news
-  FOR SELECT USING (true);
+CREATE POLICY "Allow public read access to news" ON news FOR SELECT USING (true);
 
 -- Grant necessary permissions
 GRANT SELECT ON news TO anon;
 GRANT SELECT ON news TO authenticated;
+
+RAISE NOTICE 'News table structure updated successfully';

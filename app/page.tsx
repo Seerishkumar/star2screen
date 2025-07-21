@@ -47,61 +47,74 @@ type Video = {
   is_featured?: boolean
 }
 
-async function safeFetch<T>(path: string, fallbackData: T[] = []): Promise<T[]> {
+async function fetchFromAPI<T>(endpoint: string, fallbackData: T[] = []): Promise<T[]> {
   try {
-    console.log(`[Home] Fetching ${path}...`)
+    console.log(`[fetchFromAPI] Fetching ${endpoint}...`)
 
+    // Use absolute URL for production
     const baseUrl = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
       : process.env.NODE_ENV === "production"
         ? "https://www.stars2screen.com"
         : "http://localhost:3000"
 
-    const fullUrl = `${baseUrl}${path}`
-    console.log(`[Home] Full URL: ${fullUrl}`)
+    const url = `${baseUrl}${endpoint}`
+    console.log(`[fetchFromAPI] Full URL: ${url}`)
 
-    const response = await fetch(fullUrl, {
-      cache: "no-store",
+    const response = await fetch(url, {
+      method: "GET",
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": "NextJS-Server",
+        "Cache-Control": "no-cache",
       },
-      signal: AbortSignal.timeout(15000),
+      cache: "no-store",
+      next: { revalidate: 0 },
     })
 
+    console.log(`[fetchFromAPI] Response status: ${response.status}`)
+
     if (!response.ok) {
-      console.error(`[Home] HTTP ${response.status} from ${path}:`, response.statusText)
+      console.error(`[fetchFromAPI] HTTP error ${response.status} for ${endpoint}`)
       return fallbackData
     }
 
-    const json = await response.json()
-    console.log(`[Home] Response from ${path}:`, json)
+    const data = await response.json()
+    console.log(`[fetchFromAPI] Raw response for ${endpoint}:`, data)
 
     // Handle different response formats
-    if (Array.isArray(json)) {
-      console.log(`[Home] Got ${json.length} items from ${path}`)
-      return json as T[]
+    let items: T[] = []
+
+    if (Array.isArray(data)) {
+      items = data
+    } else if (data && typeof data === "object") {
+      // Look for common array property names
+      const arrayKeys = ["banners", "ads", "articles", "videos", "data", "items"]
+      for (const key of arrayKeys) {
+        if (Array.isArray(data[key])) {
+          items = data[key]
+          break
+        }
+      }
+
+      // If no array found, try the first array property
+      if (items.length === 0) {
+        const firstArrayKey = Object.keys(data).find((key) => Array.isArray(data[key]))
+        if (firstArrayKey) {
+          items = data[firstArrayKey]
+        }
+      }
     }
 
-    // If response is an object, look for data arrays
-    const keys = Object.keys(json)
-    if (keys.length > 0) {
-      const dataKey = keys.find((key) => Array.isArray(json[key])) || keys[0]
-      const data = json[dataKey] as T[]
-      console.log(`[Home] Extracted ${data?.length || 0} items from ${path}`)
-      return data || fallbackData
-    }
-
-    console.log(`[Home] No valid data found in response from ${path}, using fallback`)
-    return fallbackData
+    console.log(`[fetchFromAPI] Processed ${items.length} items from ${endpoint}`)
+    return items.length > 0 ? items : fallbackData
   } catch (error) {
-    console.error(`[Home] Error fetching ${path}:`, error)
+    console.error(`[fetchFromAPI] Error fetching ${endpoint}:`, error)
     return fallbackData
   }
 }
 
 const getBanners = () =>
-  safeFetch<Banner>("/api/banners", [
+  fetchFromAPI<Banner>("/api/banners", [
     {
       id: 1,
       title: "Welcome to Stars2Screen",
@@ -113,7 +126,7 @@ const getBanners = () =>
   ])
 
 const getAds = () =>
-  safeFetch<Ad>("/api/ads", [
+  fetchFromAPI<Ad>("/api/ads", [
     {
       id: 1,
       title: "Professional Headshots",
@@ -131,7 +144,7 @@ const getAds = () =>
   ])
 
 const getArticles = () =>
-  safeFetch<Article>("/api/articles?limit=6", [
+  fetchFromAPI<Article>("/api/articles", [
     {
       id: 1,
       title: "Breaking into the Film Industry: A Beginner's Guide",
@@ -140,18 +153,10 @@ const getArticles = () =>
       featured_image_url: "/bustling-film-set.png",
       author_name: "Industry Expert",
     },
-    {
-      id: 2,
-      title: "The Art of Method Acting: Techniques and Tips",
-      slug: "method-acting-techniques",
-      excerpt: "Explore the world of method acting and how to master this powerful technique",
-      featured_image_url: "/confident-actress.png",
-      author_name: "Acting Coach",
-    },
   ])
 
 const getVideos = () =>
-  safeFetch<Video>("/api/videos?featured=true", [
+  fetchFromAPI<Video>("/api/videos", [
     {
       id: 1,
       title: "Acting Masterclass: Emotional Range",
@@ -162,38 +167,48 @@ const getVideos = () =>
   ])
 
 export default async function Home() {
-  console.log("[Home] Starting home page render...")
+  console.log("[Home] Starting page render...")
   console.log("[Home] Environment:", process.env.NODE_ENV)
   console.log("[Home] Vercel URL:", process.env.VERCEL_URL)
 
-  const [banners, ads, articles, videos] = await Promise.all([getBanners(), getAds(), getArticles(), getVideos()])
+  // Fetch all data in parallel
+  const [banners, ads, articles, videos] = await Promise.allSettled([
+    getBanners(),
+    getAds(),
+    getArticles(),
+    getVideos(),
+  ])
 
-  console.log("[Home] Data fetched successfully:", {
-    banners: banners.length,
-    ads: ads.length,
-    articles: articles.length,
-    videos: videos.length,
+  // Extract successful results or use empty arrays
+  const bannersData = banners.status === "fulfilled" ? banners.value : []
+  const adsData = ads.status === "fulfilled" ? ads.value : []
+  const articlesData = articles.status === "fulfilled" ? articles.value : []
+  const videosData = videos.status === "fulfilled" ? videos.value : []
+
+  console.log("[Home] Final data counts:", {
+    banners: bannersData.length,
+    ads: adsData.length,
+    articles: articlesData.length,
+    videos: videosData.length,
   })
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Debug Info - Show when in development */}
+      {/* Debug Info - Only in development */}
       {process.env.NODE_ENV === "development" && (
         <div className="bg-yellow-100 border-b border-yellow-200 p-4 text-sm">
           <div className="container px-4 md:px-6">
-            <strong>🔧 Debug Info:</strong> Banners: {banners.length}, Ads: {ads.length}, Articles: {articles.length},
-            Videos: {videos.length}
+            <strong>🔧 Debug Info:</strong> Banners: {bannersData.length}, Ads: {adsData.length}, Articles:{" "}
+            {articlesData.length}, Videos: {videosData.length}
             <br />
             <strong>Environment:</strong> {process.env.NODE_ENV} | <strong>Base URL:</strong>{" "}
             {process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "localhost:3000"}
-            <br />
-            <strong>Supabase:</strong> {process.env.NEXT_PUBLIC_SUPABASE_URL ? "✅ Connected" : "❌ Missing URL"}
           </div>
         </div>
       )}
 
       {/* Banner Carousel */}
-      <BannerCarousel banners={banners} />
+      <BannerCarousel banners={bannersData} />
 
       {/* Search Section */}
       <section className="py-12 bg-white">
@@ -212,7 +227,7 @@ export default async function Home() {
       <StatisticsSection />
 
       {/* Ads Scroller */}
-      <AdsScroller ads={ads} />
+      <AdsScroller ads={adsData} />
 
       {/* Categories Section */}
       <section className="py-12 bg-gray-50">
@@ -226,10 +241,10 @@ export default async function Home() {
       <FeaturedActors />
 
       {/* Articles & News Section */}
-      <ArticlesSection articles={articles} />
+      <ArticlesSection articles={articlesData} />
 
       {/* Video Showcase Section */}
-      <VideoShowcase videos={videos} />
+      <VideoShowcase videos={videosData} />
     </div>
   )
 }
