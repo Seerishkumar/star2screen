@@ -1,74 +1,91 @@
-"use server"
-
-/**
- * Light-weight endpoint that checks if the app can talk to Supabase
- * and reports how many rows each table contains.
- *
- *   GET /api/debug/database-connection
- *
- * – Returns 200 OK with JSON on success
- * – Returns 500 on any fatal error
- */
 import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase"
 
 export async function GET() {
-  const startedAt = Date.now()
-
   try {
-    const supabase = createServerSupabaseClient()
+    console.log("[Database Connection] Starting check...")
 
-    // Quick smoke-test: run `select 1`
-    const { error: pingError } = await supabase.rpc("int4range", { lower: 1, upper: 1 }).single().limit(1) // harmless RPC
-    if (pingError && pingError.code !== "42883") {
-      /* 42883 = function does not exist → means ping RPC is absent but connection works.
-         Anything else is a real connection failure. */
-      throw pingError
+    // Environment info
+    const environment = {
+      nodeEnv: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL_ENV,
+      isProduction: process.env.NODE_ENV === "production",
+      timestamp: new Date().toISOString(),
     }
 
-    // Check a handful of important tables (add more if you need)
-    const mustHave = [
+    // Database connection info
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const hasAnonKey = !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl) {
+      return NextResponse.json({
+        success: false,
+        error: "Missing NEXT_PUBLIC_SUPABASE_URL environment variable",
+        environment,
+      })
+    }
+
+    const database = {
+      url: supabaseUrl.substring(0, 40) + "...",
+      project: supabaseUrl.match(/https:\/\/([^.]+)/)?.[1] || "unknown",
+      hasAnonKey,
+      hasServiceKey,
+    }
+
+    // Create Supabase client with service role key for admin access
+    const supabase = createServerSupabaseClient()
+
+    // Test basic connection and get table counts
+    const tables = [
       "author_profiles",
+      "user_media",
       "banners",
       "ads",
       "articles",
+      "videos",
       "news",
       "reviews",
-      "videos",
       "conversations",
       "messages",
-    ] as const
+    ]
 
-    const tableCounts: Record<string, number | "Missing"> = {}
+    const tableCounts: Record<string, number | string> = {}
 
-    for (const table of mustHave) {
-      const { count, error } = await supabase.from(table).select("*", { count: "exact", head: true })
+    for (const tableName of tables) {
+      try {
+        const { count, error } = await supabase.from(tableName).select("*", { count: "exact", head: true })
 
-      tableCounts[table] = error ? "Missing" : (count ?? 0)
+        if (error) {
+          tableCounts[tableName] = `Error: ${error.message}`
+        } else {
+          tableCounts[tableName] = count || 0
+        }
+      } catch (err) {
+        tableCounts[tableName] = `Error: ${err instanceof Error ? err.message : "Unknown error"}`
+      }
     }
 
-    return NextResponse.json(
-      {
-        ok: true,
-        env: {
-          node: process.env.NODE_ENV,
-          vercel: process.env.VERCEL_ENV ?? "local",
-        },
-        databaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 40) + "…",
-        tableCounts,
-        elapsedMs: Date.now() - startedAt,
-      },
-      { status: 200 },
-    )
+    return NextResponse.json({
+      success: true,
+      message: "Database connection successful",
+      environment,
+      database,
+      tableCounts,
+      timestamp: new Date().toISOString(),
+    })
   } catch (error) {
-    console.error("[database-connection] fatal", error)
-    return NextResponse.json(
-      {
-        ok: false,
-        error: (error as Error).message ?? "Unknown failure",
-        elapsedMs: Date.now() - startedAt,
+    console.error("[Database Connection] Error:", error)
+
+    return NextResponse.json({
+      success: false,
+      error: "Database connection failed",
+      details: error instanceof Error ? error.message : "Unknown error",
+      environment: {
+        nodeEnv: process.env.NODE_ENV,
+        vercelEnv: process.env.VERCEL_ENV,
       },
-      { status: 500 },
-    )
+      timestamp: new Date().toISOString(),
+    })
   }
 }

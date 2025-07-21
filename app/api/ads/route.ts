@@ -3,6 +3,9 @@ import { createServerSupabaseClient } from "@/lib/supabase"
 
 export async function GET() {
   try {
+    console.log("[/api/ads] Fetching ads...")
+
+    // Use service role key to bypass RLS
     const supabase = createServerSupabaseClient()
 
     // First, try to get ads with sort_order column
@@ -14,60 +17,63 @@ export async function GET() {
 
     // If sort_order column doesn't exist, try without it
     if (error && error.code === "42703") {
-      console.log("sort_order column doesn't exist, trying with created_at")
+      console.log("[/api/ads] sort_order column doesn't exist, trying with created_at")
       const { data: adsWithoutSort, error: fallbackError } = await supabase
         .from("ads")
         .select("*")
         .eq("is_active", true)
         .order("created_at", { ascending: false })
 
-      if (fallbackError) {
-        throw fallbackError
-      }
       ads = adsWithoutSort
-    } else if (error) {
-      throw error
+      error = fallbackError
     }
 
-    // If we got data from database, return it
-    if (ads && ads.length > 0) {
-      return NextResponse.json(ads)
+    // Limit results
+    if (!error && ads) {
+      ads = ads.slice(0, 10)
     }
 
-    // If no data in database, return static fallback
-    const staticAds = [
-      {
-        id: "1",
-        title: "Premium Casting Opportunities",
-        description: "Get featured in top film projects",
-        image_url: "/confident-actress.png",
-        link_url: "/categories/actress",
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: "2",
-        title: "Director Spotlight",
-        description: "Showcase your directorial vision",
-        image_url: "/director-in-discussion.png",
-        link_url: "/categories/director",
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: "3",
-        title: "Producer Network",
-        description: "Connect with industry producers",
-        image_url: "/confident-businessman.png",
-        link_url: "/categories/producer",
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-    ]
+    if (error) {
+      console.error("[/api/ads] Database error:", error)
 
-    return NextResponse.json(staticAds)
+      // Return static fallback data
+      const staticAds = [
+        {
+          id: "1",
+          title: "Premium Casting Opportunities",
+          description: "Get featured in top film projects",
+          image_url: "/confident-actress.png",
+          link_url: "/categories/actress",
+          is_active: true,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: "2",
+          title: "Director Spotlight",
+          description: "Showcase your directorial vision",
+          image_url: "/director-in-discussion.png",
+          link_url: "/categories/director",
+          is_active: true,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: "3",
+          title: "Producer Network",
+          description: "Connect with industry producers",
+          image_url: "/confident-businessman.png",
+          link_url: "/categories/producer",
+          is_active: true,
+          created_at: new Date().toISOString(),
+        },
+      ]
+
+      return NextResponse.json(staticAds)
+    }
+
+    console.log(`[/api/ads] Found ${ads?.length || 0} ads`)
+    return NextResponse.json(ads || [])
   } catch (error) {
-    console.error("Error fetching ads:", error)
+    console.error("[/api/ads] Unexpected error:", error)
 
     // Return static fallback on any error
     const staticAds = [
@@ -77,24 +83,6 @@ export async function GET() {
         description: "Get featured in top film projects",
         image_url: "/confident-actress.png",
         link_url: "/categories/actress",
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: "2",
-        title: "Director Spotlight",
-        description: "Showcase your directorial vision",
-        image_url: "/director-in-discussion.png",
-        link_url: "/categories/director",
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: "3",
-        title: "Producer Network",
-        description: "Connect with industry producers",
-        image_url: "/confident-businessman.png",
-        link_url: "/categories/producer",
         is_active: true,
         created_at: new Date().toISOString(),
       },
