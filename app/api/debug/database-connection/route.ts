@@ -16,6 +16,9 @@ export async function GET() {
           details: {
             hasSupabaseUrl: !!supabaseUrl,
             hasServiceRoleKey: !!serviceRoleKey,
+            supabaseUrlPreview: supabaseUrl?.substring(0, 10) + "...",
+            environment: process.env.NODE_ENV,
+            vercelEnv: process.env.VERCEL_ENV,
           },
         },
         { status: 500 },
@@ -36,6 +39,8 @@ export async function GET() {
           error: "Database connection failed",
           details: testError,
           environment: process.env.NODE_ENV,
+          vercelEnv: process.env.VERCEL_ENV,
+          databaseUrl: supabaseUrl?.substring(0, 10) + "...",
         },
         { status: 500 },
       )
@@ -49,6 +54,10 @@ export async function GET() {
       supabase.from("ads").select("count", { count: "exact", head: true }),
       supabase.from("articles").select("count", { count: "exact", head: true }),
       supabase.from("videos").select("count", { count: "exact", head: true }),
+      supabase.from("news").select("count", { count: "exact", head: true }),
+      supabase.from("reviews").select("count", { count: "exact", head: true }),
+      supabase.from("conversations").select("count", { count: "exact", head: true }),
+      supabase.from("messages").select("count", { count: "exact", head: true }),
     ])
 
     const tableResults = {
@@ -58,6 +67,10 @@ export async function GET() {
       ads: tableTests[3].status === "fulfilled" ? tableTests[3].value.count : "Error",
       articles: tableTests[4].status === "fulfilled" ? tableTests[4].value.count : "Error",
       videos: tableTests[5].status === "fulfilled" ? tableTests[5].value.count : "Error",
+      news: tableTests[6].status === "fulfilled" ? tableTests[6].value.count : "Error",
+      reviews: tableTests[7].status === "fulfilled" ? tableTests[7].value.count : "Error",
+      conversations: tableTests[8].status === "fulfilled" ? tableTests[8].value.count : "Error",
+      messages: tableTests[9].status === "fulfilled" ? tableTests[9].value.count : "Error",
     }
 
     return NextResponse.json({
@@ -65,6 +78,8 @@ export async function GET() {
       message: "Database connection successful",
       tableCounts: tableResults,
       environment: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL_ENV,
+      databaseUrl: supabaseUrl?.substring(0, 10) + "...",
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
@@ -75,6 +90,7 @@ export async function GET() {
         error: "Database connection test failed",
         details: error instanceof Error ? error.message : "Unknown error",
         environment: process.env.NODE_ENV,
+        vercelEnv: process.env.VERCEL_ENV,
       },
       { status: 500 },
     )
