@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
 // Sample static data as fallback
 const staticNewsData = [
@@ -33,26 +33,6 @@ const staticNewsData = [
     is_featured: false,
     published_at: new Date().toISOString(),
   },
-  {
-    id: "4",
-    title: "New Technology Revolutionizes Post-Production",
-    content: "How AI is changing editing workflows...",
-    image_url: "/confident-young-professional.png",
-    source: "Tech in Film",
-    category: "Technology",
-    is_featured: false,
-    published_at: new Date().toISOString(),
-  },
-  {
-    id: "5",
-    title: "Streaming Platform Signs Major Deal with Indie Filmmakers",
-    content: "Details of the new partnership...",
-    image_url: "/woman-contemplating-window.png",
-    source: "Streaming News",
-    category: "Business",
-    is_featured: true,
-    published_at: new Date().toISOString(),
-  },
 ]
 
 export async function GET(request: Request) {
@@ -67,35 +47,28 @@ export async function GET(request: Request) {
 
     if (!supabaseUrl || !supabaseKey) {
       console.error("Missing environment variables for Supabase")
-      return NextResponse.json({
-        data: staticNewsData,
-        isStaticFallback: true,
-        error: "Using static fallback data due to missing environment variables",
-      })
+      return NextResponse.json(staticNewsData)
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Check if the news table exists
-    const { error: tableCheckError } = await supabase.from("news").select("id", { count: "exact", head: true })
+    // First check if table exists and what columns are available
+    const { data: tableInfo, error: tableError } = await supabase.from("news").select("*").limit(1)
 
-    if (tableCheckError) {
-      console.error("Error checking news table:", tableCheckError)
-      return NextResponse.json({
-        data: staticNewsData,
-        isStaticFallback: true,
-        error: "Using static fallback data due to database table issue",
-      })
+    if (tableError) {
+      console.error("Error checking news table:", tableError)
+      return NextResponse.json(staticNewsData)
     }
 
-    // Build the query
+    // Build query based on available columns
     let query = supabase.from("news").select("*")
 
     if (category) {
       query = query.eq("category", category)
     }
 
-    if (featured) {
+    // Only filter by is_featured if the column exists
+    if (featured && tableInfo && tableInfo.length > 0 && "is_featured" in tableInfo[0]) {
       query = query.eq("is_featured", true)
     }
 
@@ -103,20 +76,12 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error("Error fetching news:", error)
-      return NextResponse.json({
-        data: staticNewsData,
-        isStaticFallback: true,
-        error: "Using static fallback data due to database query error",
-      })
+      return NextResponse.json(staticNewsData)
     }
 
-    return NextResponse.json(data.length > 0 ? data : staticNewsData)
+    return NextResponse.json(data && data.length > 0 ? data : staticNewsData)
   } catch (error) {
     console.error("Unexpected error in news API:", error)
-    return NextResponse.json({
-      data: staticNewsData,
-      isStaticFallback: true,
-      error: "Using static fallback data due to unexpected error",
-    })
+    return NextResponse.json(staticNewsData)
   }
 }

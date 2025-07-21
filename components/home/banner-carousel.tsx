@@ -22,8 +22,11 @@ interface BannerCarouselProps {
 export function BannerCarousel({ banners = [] }: BannerCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
 
-  // Filter out any invalid banners
+  // Filter out any invalid banners and log what we received
   const validBanners = banners.filter((banner) => banner && banner.image_url)
+
+  console.log("[BannerCarousel] Received banners:", banners)
+  console.log("[BannerCarousel] Valid banners:", validBanners)
 
   useEffect(() => {
     if (validBanners.length <= 1) return
@@ -36,6 +39,7 @@ export function BannerCarousel({ banners = [] }: BannerCarouselProps) {
   }, [validBanners.length])
 
   if (validBanners.length === 0) {
+    console.log("[BannerCarousel] No valid banners, showing default")
     return (
       <div className="relative h-96 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
         <div className="absolute inset-0 flex items-center justify-center">
@@ -52,6 +56,7 @@ export function BannerCarousel({ banners = [] }: BannerCarouselProps) {
   }
 
   const currentBanner = validBanners[currentIndex]
+  console.log("[BannerCarousel] Current banner:", currentBanner)
 
   const goToPrevious = () => {
     setCurrentIndex((prevIndex) => (prevIndex - 1 + validBanners.length) % validBanners.length)

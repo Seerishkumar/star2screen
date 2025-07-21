@@ -16,6 +16,7 @@ type Banner = {
   button_text?: string
   is_active?: boolean
 }
+
 type Ad = {
   id: number
   image_url: string
@@ -24,6 +25,7 @@ type Ad = {
   description?: string
   is_active?: boolean
 }
+
 type Article = {
   id: number
   title: string
@@ -34,6 +36,7 @@ type Article = {
   published_at?: string
   status?: string
 }
+
 type Video = {
   id: number
   video_url: string
@@ -63,7 +66,7 @@ async function safeFetch<T>(path: string, fallbackData: T[] = []): Promise<T[]> 
         "Content-Type": "application/json",
         "User-Agent": "NextJS-Server",
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(15000),
     })
 
     if (!response.ok) {
@@ -74,10 +77,13 @@ async function safeFetch<T>(path: string, fallbackData: T[] = []): Promise<T[]> 
     const json = await response.json()
     console.log(`[Home] Response from ${path}:`, json)
 
+    // Handle different response formats
     if (Array.isArray(json)) {
+      console.log(`[Home] Got ${json.length} items from ${path}`)
       return json as T[]
     }
 
+    // If response is an object, look for data arrays
     const keys = Object.keys(json)
     if (keys.length > 0) {
       const dataKey = keys.find((key) => Array.isArray(json[key])) || keys[0]
@@ -86,6 +92,7 @@ async function safeFetch<T>(path: string, fallbackData: T[] = []): Promise<T[]> 
       return data || fallbackData
     }
 
+    console.log(`[Home] No valid data found in response from ${path}, using fallback`)
     return fallbackData
   } catch (error) {
     console.error(`[Home] Error fetching ${path}:`, error)
@@ -170,7 +177,7 @@ export default async function Home() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Debug Info - Show when no data is loaded */}
+      {/* Debug Info - Show when in development */}
       {process.env.NODE_ENV === "development" && (
         <div className="bg-yellow-100 border-b border-yellow-200 p-4 text-sm">
           <div className="container px-4 md:px-6">
@@ -215,7 +222,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Featured Professionals Section - THIS IS THE KEY SECTION */}
+      {/* Featured Professionals Section */}
       <FeaturedActors />
 
       {/* Articles & News Section */}

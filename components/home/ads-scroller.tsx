@@ -24,6 +24,9 @@ export function AdsScroller({ ads = [] }: AdsScrollerProps) {
 
   const validAds = ads.filter((ad) => ad && ad.image_url && ad.title)
 
+  console.log("[AdsScroller] Received ads:", ads)
+  console.log("[AdsScroller] Valid ads:", validAds)
+
   const scrollLeft = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollBy({ left: -300, behavior: "smooth" })
@@ -37,6 +40,7 @@ export function AdsScroller({ ads = [] }: AdsScrollerProps) {
   }
 
   if (validAds.length === 0) {
+    console.log("[AdsScroller] No valid ads, hiding section")
     return null
   }
 
