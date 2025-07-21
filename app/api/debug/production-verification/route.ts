@@ -1,190 +1,118 @@
+"use server"
+
+/**
+ * Comprehensive production health-check.
+ *
+ *   GET /api/debug/production-verification
+ *
+ *  – Verifies required tables exist & have data
+ *  – Calls the public API routes to be sure they answer with DB data
+ *  – Never throws: always responds with JSON { ok: boolean, … }
+ */
+
 import { NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createServerSupabaseClient } from "@/lib/supabase"
+
+const REQUIRED_TABLES = [
+  "author_profiles",
+  "banners",
+  "ads",
+  "articles",
+  "news",
+  "reviews",
+  "videos",
+  "conversations",
+  "messages",
+] as const
+
+const PUBLIC_APIS = ["/api/banners", "/api/ads", "/api/articles", "/api/news", "/api/reviews"] as const
 
 export async function GET() {
+  const startedAt = Date.now()
+  const result: any = {
+    ok: true,
+    env: {
+      node: process.env.NODE_ENV,
+      vercel: process.env.VERCEL_ENV ?? "local",
+    },
+    database: {
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 40) + "…",
+    },
+    tables: {},
+    apis: {},
+  }
+
   try {
-    console.log("[Production Verification] Starting comprehensive database check...")
+    /* ---------- 1) DATABASE CHECK ---------- */
+    const supabase = createServerSupabaseClient()
 
-    const results = {
-      environment: {
-        nodeEnv: process.env.NODE_ENV,
-        vercelEnv: process.env.VERCEL_ENV,
-        isProduction: process.env.NODE_ENV === "production",
-        timestamp: new Date().toISOString(),
-      },
-      database: {
-        url: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 40) + "...",
-        project: process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)/)?.[1] || "unknown",
-      },
-      tables: {} as Record<string, any>,
-      apis: {} as Record<string, any>,
-      errors: [] as string[],
-    }
-
-    // Test each table individually
-    const tablesToCheck = [
-      "banners",
-      "articles",
-      "news",
-      "reviews",
-      "ads",
-      "videos",
-      "author_profiles",
-      "conversations",
-      "messages",
-    ]
-
-    for (const tableName of tablesToCheck) {
+    for (const table of REQUIRED_TABLES) {
       try {
-        const { data, error, count } = await supabase.from(tableName).select("*", { count: "exact" }).limit(5)
+        const { count, error } = await supabase.from(table).select("*", { count: "exact", head: true })
 
-        if (error) {
-          results.tables[tableName] = {
-            exists: false,
-            error: error.message,
-            code: error.code,
-          }
-          results.errors.push(`Table ${tableName}: ${error.message}`)
-        } else {
-          results.tables[tableName] = {
-            exists: true,
-            count: count || 0,
-            hasData: (count || 0) > 0,
-            sampleData: data?.slice(0, 2) || [],
-          }
+        result.tables[table] = {
+          exists: !error,
+          rows: error ? 0 : (count ?? 0),
         }
       } catch (err) {
-        results.tables[tableName] = {
-          exists: false,
-          error: err instanceof Error ? err.message : "Unknown error",
-        }
-        results.errors.push(`Table ${tableName}: ${err instanceof Error ? err.message : "Unknown error"}`)
+        // Table definitely missing
+        result.tables[table] = { exists: false, rows: 0, error: (err as Error).message }
       }
     }
 
-    // Test API endpoints
-    const baseUrl = process.env.VERCEL_URL
+    /* ---------- 2) API ROUTE CHECK ---------- */
+    // Derive base URL safely (works locally, in preview & prod)
+    const base = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
-      : process.env.NODE_ENV === "production"
-        ? "https://www.stars2screen.com"
-        : "http://localhost:3000"
+      : `http://localhost:${process.env.PORT ?? 3000}`
 
-    const apisToTest = [
-      { name: "banners", url: `${baseUrl}/api/banners` },
-      { name: "articles", url: `${baseUrl}/api/articles` },
-      { name: "news", url: `${baseUrl}/api/news` },
-      { name: "reviews", url: `${baseUrl}/api/reviews` },
-    ]
-
-    for (const api of apisToTest) {
+    for (const route of PUBLIC_APIS) {
       try {
-        const response = await fetch(api.url, {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        })
+        const res = await fetch(base + route, { cache: "no-store" })
+        const json = await res.json().catch(() => ({}))
 
-        if (response.ok) {
-          const data = await response.json()
-          results.apis[api.name] = {
-            status: "success",
-            statusCode: response.status,
-            hasData:
-              Object.values(data)[0] &&
-              Array.isArray(Object.values(data)[0]) &&
-              (Object.values(data)[0] as any[]).length > 0,
-            dataCount: Array.isArray(Object.values(data)[0]) ? (Object.values(data)[0] as any[]).length : 0,
-          }
-        } else {
-          results.apis[api.name] = {
-            status: "error",
-            statusCode: response.status,
-            error: response.statusText,
-          }
-          results.errors.push(`API ${api.name}: ${response.status} ${response.statusText}`)
+        result.apis[route] = {
+          status: res.status,
+          ok: res.ok,
+          dataCount: Array.isArray(json) ? json.length : Array.isArray(json?.data) ? json.data.length : 0,
+          staticFallback: json?.isStaticFallback ?? false,
         }
       } catch (err) {
-        results.apis[api.name] = {
-          status: "error",
-          error: err instanceof Error ? err.message : "Unknown error",
-        }
-        results.errors.push(`API ${api.name}: ${err instanceof Error ? err.message : "Unknown error"}`)
+        result.apis[route] = { status: 599, ok: false, error: (err as Error).message }
       }
     }
 
-    // Overall health check
-    const totalTables = Object.keys(results.tables).length
-    const existingTables = Object.values(results.tables).filter((t) => t.exists).length
-    const tablesWithData = Object.values(results.tables).filter((t) => t.exists && t.hasData).length
+    /* ---------- 3) SUMMARY ---------- */
+    const missingTables = Object.entries(result.tables)
+      .filter(([, v]: any) => !v.exists)
+      .map(([k]) => k)
 
-    const workingApis = Object.values(results.apis).filter((a) => a.status === "success").length
-    const apisWithData = Object.values(results.apis).filter((a) => a.status === "success" && a.hasData).length
+    const emptyTables = Object.entries(result.tables)
+      .filter(([, v]: any) => v.exists && v.rows === 0)
+      .map(([k]) => k)
 
-    const healthScore = {
-      tablesExist: `${existingTables}/${totalTables}`,
-      tablesWithData: `${tablesWithData}/${totalTables}`,
-      apisWorking: `${workingApis}/${apisToTest.length}`,
-      apisWithData: `${apisWithData}/${apisToTest.length}`,
-      overallHealth: results.errors.length === 0 ? "HEALTHY" : results.errors.length < 5 ? "PARTIAL" : "UNHEALTHY",
+    const failingApis = Object.entries(result.apis)
+      .filter(([, v]: any) => !v.ok)
+      .map(([k]) => k)
+
+    result.summary = {
+      missingTables,
+      emptyTables,
+      failingApis,
+      healthy: missingTables.length === 0 && failingApis.length === 0,
     }
 
-    console.log("[Production Verification] Check completed:", healthScore)
-
-    return NextResponse.json({
-      ...results,
-      healthScore,
-      summary: {
-        isFullyOperational: results.errors.length === 0 && tablesWithData >= 4 && apisWithData >= 3,
-        needsSetup: existingTables < totalTables * 0.7,
-        recommendations: generateRecommendations(results),
-      },
-    })
+    result.elapsedMs = Date.now() - startedAt
+    return NextResponse.json(result, { status: 200 })
   } catch (error) {
-    console.error("[Production Verification] Failed:", error)
+    console.error("[production-verification] fatal", error)
     return NextResponse.json(
       {
-        success: false,
-        error: "Production verification failed",
-        details: error instanceof Error ? error.message : "Unknown error",
-        timestamp: new Date().toISOString(),
+        ok: false,
+        error: (error as Error).message ?? "Unknown failure",
+        elapsedMs: Date.now() - startedAt,
       },
       { status: 500 },
     )
   }
-}
-
-function generateRecommendations(results: any): string[] {
-  const recommendations: string[] = []
-
-  // Check for missing tables
-  const missingTables = Object.entries(results.tables)
-    .filter(([_, table]: [string, any]) => !table.exists)
-    .map(([name, _]) => name)
-
-  if (missingTables.length > 0) {
-    recommendations.push(`Run database script to create missing tables: ${missingTables.join(", ")}`)
-  }
-
-  // Check for empty tables
-  const emptyTables = Object.entries(results.tables)
-    .filter(([_, table]: [string, any]) => table.exists && !table.hasData)
-    .map(([name, _]) => name)
-
-  if (emptyTables.length > 0) {
-    recommendations.push(`Add sample data to empty tables: ${emptyTables.join(", ")}`)
-  }
-
-  // Check for failing APIs
-  const failingApis = Object.entries(results.apis)
-    .filter(([_, api]: [string, any]) => api.status === "error")
-    .map(([name, _]) => name)
-
-  if (failingApis.length > 0) {
-    recommendations.push(`Fix failing API endpoints: ${failingApis.join(", ")}`)
-  }
-
-  if (recommendations.length === 0) {
-    recommendations.push("All systems operational! 🎉")
-  }
-
-  return recommendations
 }

@@ -1,49 +1,71 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 
-// Environment safety-checks
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""
+// Production environment variables - no local setup
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Missing Supabase environment variables:", {
-    hasUrl: !!supabaseUrl,
-    hasAnonKey: !!supabaseAnonKey,
-    hasServiceKey: !!serviceRoleKey,
-  })
-  throw new Error(
-    "Missing Supabase env vars: make sure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set",
-  )
+// Validate required environment variables
+if (!supabaseUrl) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL environment variable")
 }
 
-// Universal factory (works in both browser & server contexts)
+if (!supabaseAnonKey) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable")
+}
+
+// Universal factory for creating Supabase clients
 export function createClient(url: string = supabaseUrl, key: string = supabaseAnonKey) {
   return createSupabaseClient(url, key, {
     auth: {
-      persistSession: false, // Important for server-side usage
+      persistSession: typeof window !== "undefined", // Only persist in browser
+      autoRefreshToken: typeof window !== "undefined",
+      detectSessionInUrl: typeof window !== "undefined",
+    },
+    db: {
+      schema: "public",
+    },
+    global: {
+      headers: {
+        "X-Client-Info": "stars2screen-app",
+      },
     },
   })
 }
 
-// Browser singleton – avoids "duplicate connection" warnings
-let _browserClient: ReturnType<typeof createSupabaseClient> | undefined
+// Browser client singleton
+let browserClient: ReturnType<typeof createSupabaseClient> | null = null
 
-function getBrowserClient() {
-  if (typeof window === "undefined") return null
-  if (!_browserClient) {
-    _browserClient = createClient()
+export function getBrowserClient() {
+  if (typeof window === "undefined") {
+    return null
   }
-  return _browserClient
+
+  if (!browserClient) {
+    browserClient = createClient()
+  }
+
+  return browserClient
 }
 
-// Exported singleton that Just Works™ everywhere
-export const supabase = getBrowserClient() ?? createClient(supabaseUrl, supabaseAnonKey)
+// Default export for client-side usage
+export const supabase = getBrowserClient() ?? createClient()
 
-// Helper for Server Components / API routes needing elevated privileges
+// Server-side client with service role key for admin operations
 export function createServerSupabaseClient() {
   if (!serviceRoleKey) {
-    console.warn("Missing SUPABASE_SERVICE_ROLE_KEY – using anon key instead")
+    console.warn("SUPABASE_SERVICE_ROLE_KEY not found, using anon key")
     return createClient(supabaseUrl, supabaseAnonKey)
   }
+
+  return createClient(supabaseUrl, serviceRoleKey)
+}
+
+// Admin client for database operations that require elevated permissions
+export function createAdminClient() {
+  if (!serviceRoleKey) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for admin operations")
+  }
+
   return createClient(supabaseUrl, serviceRoleKey)
 }
