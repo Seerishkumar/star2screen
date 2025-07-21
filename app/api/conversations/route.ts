@@ -1,106 +1,151 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { crypto } from "crypto"
+import { randomUUID } from "crypto"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+})
+
 export async function GET(request: NextRequest) {
   try {
-    console.log("💬 Conversations API called")
-
-    // Validate environment variables first
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error("❌ Missing Supabase environment variables")
-      return NextResponse.json(
-        {
-          error: "Server configuration error",
-          conversations: [],
-        },
-        { status: 500 },
-      )
-    }
-
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("userId")
 
-    console.log("👤 Getting conversations for user:", userId)
+    console.log("💬 Conversations API - GET request")
+    console.log("💬 User ID:", userId)
 
     if (!userId) {
-      console.log("❌ No user ID provided")
-      return NextResponse.json({
-        conversations: [],
-        count: 0,
-        message: "User ID is required",
-      })
+      return NextResponse.json(
+        {
+          error: "User ID is required",
+          conversations: [],
+        },
+        { status: 400 },
+      )
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
+    // First, check what columns exist in author_profiles table
+    const { data: tableInfo, error: tableError } = await supabase.from("author_profiles").select("*").limit(1)
 
-    console.log("🔍 Querying conversation_participants...")
+    console.log("📋 Checking author_profiles table structure...")
 
-    // Get conversations for the user using direct SQL query
-    const { data: participantData, error: participantError } = await supabase
-      .from("conversation_participants")
+    if (tableError) {
+      console.error("❌ Error checking table structure:", tableError)
+    }
+
+    // Get conversations where user is a participant
+    const { data: conversations, error: conversationsError } = await supabase
+      .from("conversations")
       .select(`
-        conversation_id,
-        conversations!inner(
-          id,
-          title,
-          type,
-          created_at,
-          updated_at
+        id,
+        title,
+        type,
+        created_at,
+        updated_at,
+        conversation_participants!inner (
+          user_id,
+          is_active
         )
       `)
-      .eq("user_id", userId)
-      .eq("is_active", true)
+      .eq("conversation_participants.user_id", userId)
+      .eq("conversation_participants.is_active", true)
+      .order("updated_at", { ascending: false })
 
-    if (participantError) {
-      console.error("❌ Error fetching conversation participants:", participantError)
+    if (conversationsError) {
+      console.error("❌ Error fetching conversations:", conversationsError)
       return NextResponse.json(
         {
           error: "Failed to fetch conversations",
-          details: participantError.message,
+          details: conversationsError.message,
           conversations: [],
         },
         { status: 500 },
       )
     }
 
-    console.log("✅ Found participant data:", participantData?.length || 0)
+    console.log("✅ Found conversations:", conversations?.length || 0)
 
-    if (!participantData || participantData.length === 0) {
-      console.log("ℹ️ No conversations found for user")
-      return NextResponse.json({
-        conversations: [],
-        count: 0,
-        message: "No conversations found",
-      })
-    }
+    // For each conversation, get other participants with safe column selection
+    const enrichedConversations = await Promise.all(
+      (conversations || []).map(async (conversation) => {
+        // Get participant IDs (except current user)
+        const { data: participantRows, error: participantErr } = await supabase
+          .from("conversation_participants")
+          .select("user_id")
+          .eq("conversation_id", conversation.id)
+          .eq("is_active", true)
+          .neq("user_id", userId)
 
-    // Transform the data
-    const conversations = participantData.map((item) => ({
-      id: item.conversations.id,
-      title: item.conversations.title || "Untitled Conversation",
-      type: item.conversations.type || "direct",
-      created_at: item.conversations.created_at,
-      updated_at: item.conversations.updated_at,
-      participants: [], // We'll populate this separately if needed
-    }))
+        if (participantErr) {
+          console.error("❌ Error fetching participant IDs:", participantErr)
+          return { ...conversation, other_participants: [] }
+        }
 
-    console.log("✅ Returning conversations:", conversations.length)
+        const participantIds = (participantRows ?? []).map((p) => p.user_id)
+
+        // Fetch profile data with safe column selection
+        let profiles: {
+          user_id: string
+          display_name: string | null
+          full_name: string | null
+          profile_picture_url?: string | null
+        }[] = []
+
+        if (participantIds.length) {
+          try {
+            // Try to select with all columns first
+            const { data: profileRows, error: profileErr } = await supabase
+              .from("author_profiles")
+              .select("user_id, display_name, full_name, profile_picture_url")
+              .in("user_id", participantIds)
+
+            if (profileErr) {
+              console.warn("⚠️ Error with full profile query, trying basic columns:", profileErr)
+
+              // Fallback to basic columns only
+              const { data: basicProfileRows, error: basicProfileErr } = await supabase
+                .from("author_profiles")
+                .select("user_id, display_name, full_name")
+                .in("user_id", participantIds)
+
+              if (basicProfileErr) {
+                console.error("❌ Error fetching basic profiles:", basicProfileErr)
+              } else {
+                profiles = (basicProfileRows ?? []).map((profile) => ({
+                  ...profile,
+                  profile_picture_url: null,
+                }))
+              }
+            } else {
+              profiles = profileRows ?? []
+            }
+          } catch (error) {
+            console.error("❌ Error in profile fetching:", error)
+            // Return empty profiles array as fallback
+            profiles = participantIds.map((id) => ({
+              user_id: id,
+              display_name: "Unknown User",
+              full_name: "Unknown User",
+              profile_picture_url: null,
+            }))
+          }
+        }
+
+        return { ...conversation, other_participants: profiles }
+      }),
+    )
 
     return NextResponse.json({
-      conversations,
-      count: conversations.length,
+      conversations: enrichedConversations,
     })
   } catch (error) {
-    console.error("❌ Unexpected error in conversations API:", error)
+    console.error("❌ Conversations API error:", error)
     return NextResponse.json(
       {
         error: "Internal server error",
@@ -114,79 +159,36 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const body = await request.json()
+    const { participants, title, type = "direct" } = body
+
     console.log("💬 Creating new conversation")
+    console.log("💬 Participants:", participants)
+    console.log("💬 Title:", title)
+    console.log("💬 Type:", type)
 
-    // Validate environment variables first
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error("❌ Missing Supabase environment variables")
+    if (!participants || !Array.isArray(participants) || participants.length < 2) {
       return NextResponse.json(
         {
-          error: "Server configuration error",
-        },
-        { status: 500 },
-      )
-    }
-
-    let body
-    try {
-      body = await request.json()
-    } catch (parseError) {
-      console.error("❌ Error parsing request body:", parseError)
-      return NextResponse.json(
-        {
-          error: "Invalid JSON in request body",
-          details: parseError instanceof Error ? parseError.message : "Unknown parsing error",
+          error: "At least 2 participants are required",
+          conversation: null,
         },
         { status: 400 },
       )
     }
 
-    const { participants, currentUserId, title } = body
+    // Generate conversation ID
+    const conversationId = randomUUID()
 
-    console.log("📝 Conversation data:", { participants, currentUserId, title })
-
-    if (!participants || !Array.isArray(participants) || participants.length === 0) {
-      return NextResponse.json(
-        {
-          error: "Invalid participants",
-          details: "Participants array is required and must not be empty",
-        },
-        { status: 400 },
-      )
-    }
-
-    if (!currentUserId) {
-      return NextResponse.json(
-        {
-          error: "Invalid user",
-          details: "Current user ID is required",
-        },
-        { status: 400 },
-      )
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
-
-    // Generate a UUID for the conversation
-    const conversationId = crypto.randomUUID()
-    const now = new Date().toISOString()
-
-    console.log("🆕 Creating conversation with ID:", conversationId)
-
-    // Create the conversation
+    // Create conversation
     const { data: conversation, error: conversationError } = await supabase
       .from("conversations")
       .insert({
         id: conversationId,
-        title: title || "New Conversation",
-        type: participants.length === 1 ? "direct" : "group",
-        created_at: now,
-        updated_at: now,
+        title: title || null,
+        type: type,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .select()
       .single()
@@ -197,63 +199,64 @@ export async function POST(request: NextRequest) {
         {
           error: "Failed to create conversation",
           details: conversationError.message,
+          conversation: null,
         },
         { status: 500 },
       )
     }
 
-    console.log("✅ Conversation created:", conversation)
-
-    // Add all participants (including current user)
-    const allParticipants = [currentUserId, ...participants]
-    const uniqueParticipants = [...new Set(allParticipants)] // Remove duplicates
-
-    console.log("👥 Adding participants:", uniqueParticipants)
-
-    const participantInserts = uniqueParticipants.map((participantId) => ({
+    // Add participants
+    const participantInserts = participants.map((userId) => ({
+      id: randomUUID(),
       conversation_id: conversationId,
-      user_id: participantId,
+      user_id: userId,
       is_active: true,
-      joined_at: now,
+      joined_at: new Date().toISOString(),
     }))
 
     const { error: participantsError } = await supabase.from("conversation_participants").insert(participantInserts)
 
     if (participantsError) {
       console.error("❌ Error adding participants:", participantsError)
-
-      // Try to clean up the conversation
-      try {
-        await supabase.from("conversations").delete().eq("id", conversationId)
-        console.log("🧹 Cleaned up conversation after participant error")
-      } catch (cleanupError) {
-        console.error("❌ Error cleaning up conversation:", cleanupError)
-      }
+      // Clean up conversation if participants failed
+      await supabase.from("conversations").delete().eq("id", conversationId)
 
       return NextResponse.json(
         {
           error: "Failed to add participants",
           details: participantsError.message,
+          conversation: null,
         },
         { status: 500 },
       )
     }
 
-    console.log("✅ Participants added successfully")
+    console.log("✅ Conversation created successfully:", conversationId)
+
+    // Return the created conversation with participants
+    const { data: enrichedConversation } = await supabase
+      .from("conversations")
+      .select(`
+        id,
+        title,
+        type,
+        created_at,
+        updated_at
+      `)
+      .eq("id", conversationId)
+      .single()
 
     return NextResponse.json({
-      conversation_id: conversationId,
-      title: conversation.title,
-      type: conversation.type,
-      participants: uniqueParticipants,
+      conversation: enrichedConversation,
       message: "Conversation created successfully",
     })
   } catch (error) {
-    console.error("❌ Unexpected error creating conversation:", error)
+    console.error("❌ Create conversation error:", error)
     return NextResponse.json(
       {
         error: "Internal server error",
         details: error instanceof Error ? error.message : "Unknown error",
+        conversation: null,
       },
       { status: 500 },
     )

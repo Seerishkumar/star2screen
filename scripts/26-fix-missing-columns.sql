@@ -21,7 +21,7 @@ BEGIN
         WHERE table_name = 'author_profiles' 
         AND column_name = 'category'
     ) THEN
-        ALTER TABLE author_profiles ADD COLUMN category TEXT DEFAULT 'Actor';
+        ALTER TABLE author_profiles ADD COLUMN category TEXT DEFAULT 'Not specified';
         RAISE NOTICE '✅ Added category column';
     ELSE
         RAISE NOTICE '✅ category column already exists';
@@ -50,15 +50,18 @@ BEGIN
     ELSE
         RAISE NOTICE '✅ profession column already exists';
     END IF;
-END $$;
 
--- Update existing records with default values where NULL
-UPDATE author_profiles 
-SET 
-    category = COALESCE(category, 'Actor'),
-    location = COALESCE(location, 'Not specified'),
-    profession = COALESCE(profession, 'Not specified')
-WHERE category IS NULL OR location IS NULL OR profession IS NULL;
+    -- Update existing records with default values
+    UPDATE author_profiles 
+    SET category = 'Not specified' 
+    WHERE category IS NULL;
+
+    UPDATE author_profiles 
+    SET location = 'Not specified' 
+    WHERE location IS NULL;
+
+    RAISE NOTICE 'Updated existing records with default values';
+END $$;
 
 -- Verify the columns exist
 SELECT 

@@ -14,15 +14,25 @@ interface Conversation {
   type: "direct" | "group"
   created_at: string
   updated_at: string
-  participants: string[]
+  other_participants: Array<{
+    user_id: string
+    display_name?: string | null
+    full_name?: string | null
+    profile_picture_url?: string | null
+  }>
 }
 
 interface ConversationListProps {
-  onConversationSelect?: (conversationId: string) => void
+  onConversationSelect?: (conversation: Conversation) => void
   selectedConversationId?: string
+  refreshTrigger?: number
 }
 
-export function ConversationList({ onConversationSelect, selectedConversationId }: ConversationListProps) {
+export function ConversationList({
+  onConversationSelect,
+  selectedConversationId,
+  refreshTrigger,
+}: ConversationListProps) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +75,7 @@ export function ConversationList({ onConversationSelect, selectedConversationId 
 
   useEffect(() => {
     fetchConversations()
-  }, [user?.id])
+  }, [user?.id, refreshTrigger])
 
   const handleRetry = () => {
     fetchConversations()
@@ -87,6 +97,15 @@ export function ConversationList({ onConversationSelect, selectedConversationId 
     } catch {
       return "Unknown"
     }
+  }
+
+  const getConversationTitle = (c: Conversation) => {
+    if (c.title) return c.title
+    if (c.type === "direct" && c.other_participants.length) {
+      const p = c.other_participants[0]
+      return p.display_name || p.full_name || "Unknown User"
+    }
+    return "Group Chat"
   }
 
   if (loading) {
@@ -140,7 +159,7 @@ export function ConversationList({ onConversationSelect, selectedConversationId 
             key={conversation.id}
             variant={selectedConversationId === conversation.id ? "secondary" : "ghost"}
             className="w-full justify-start h-auto p-3"
-            onClick={() => onConversationSelect?.(conversation.id)}
+            onClick={() => onConversationSelect?.(conversation)}
           >
             <div className="flex items-center space-x-3 w-full">
               <div className="relative">
@@ -153,7 +172,7 @@ export function ConversationList({ onConversationSelect, selectedConversationId 
                 </div>
               </div>
               <div className="flex-1 text-left min-w-0">
-                <p className="font-medium truncate">{conversation.title}</p>
+                <p className="font-medium truncate">{getConversationTitle(conversation)}</p>
                 <p className="text-xs text-muted-foreground">
                   {conversation.type === "group" ? "Group chat" : "Direct message"}
                 </p>

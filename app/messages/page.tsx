@@ -1,87 +1,107 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { MessageCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { ConversationList } from "@/components/messaging/conversation-list"
+import { ChatInterface } from "@/components/messaging/chat-interface"
 import { NewChatDialog } from "@/components/messaging/new-chat-dialog"
+import { Plus, MessageCircle } from "lucide-react"
 import { useAuth } from "@/components/auth/auth-provider"
 
+interface Conversation {
+  id: string
+  title: string
+  type: "direct" | "group"
+  created_at: string
+  updated_at: string
+  other_participants: Array<{
+    user_id: string
+    display_name?: string | null
+    full_name?: string | null
+    profile_picture_url?: string | null
+  }>
+}
+
 export default function MessagesPage() {
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
+  const [showNewChatDialog, setShowNewChatDialog] = useState(false)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [showMobileChat, setShowMobileChat] = useState(false)
   const { user } = useAuth()
 
-  const handleConversationSelect = (conversationId: string) => {
-    setSelectedConversationId(conversationId)
+  const handleConversationSelect = (conversation: Conversation) => {
+    setSelectedConversation(conversation)
+    setShowMobileChat(true)
   }
 
-  const handleConversationCreated = (conversationId: string) => {
-    console.log("🆕 New conversation created:", conversationId)
-    setSelectedConversationId(conversationId)
-    // Refresh the page to show the new conversation
-    window.location.reload()
+  const handleNewConversation = (conversation: Conversation) => {
+    setSelectedConversation(conversation)
+    setShowMobileChat(true)
+    setRefreshTrigger((prev) => prev + 1)
+    setShowNewChatDialog(false)
+  }
+
+  const handleBackToList = () => {
+    setShowMobileChat(false)
+    setSelectedConversation(null)
   }
 
   if (!user) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardContent className="flex items-center justify-center py-8">
-            <div className="text-center">
-              <MessageCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h2 className="text-xl font-semibold mb-2">Sign in to access messages</h2>
-              <p className="text-muted-foreground">You need to be logged in to view and send messages.</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="text-center">
+          <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <h1 className="text-2xl font-bold mb-2">Messages</h1>
+          <p className="text-muted-foreground">Please log in to access your messages</p>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-200px)]">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Messages</h1>
+          <p className="text-muted-foreground">Connect with other film industry professionals</p>
+        </div>
+        <Button onClick={() => setShowNewChatDialog(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          New Chat
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
         {/* Conversations List */}
-        <Card className="lg:col-span-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <CardTitle className="flex items-center gap-2">
-              <MessageCircle className="h-5 w-5" />
-              Your Conversations
-            </CardTitle>
-            <NewChatDialog onConversationCreated={handleConversationCreated} />
-          </CardHeader>
-          <Separator />
-          <CardContent className="p-0">
+        <div className={`lg:col-span-1 ${showMobileChat ? "hidden lg:block" : ""}`}>
+          <div className="border rounded-lg h-full flex flex-col">
+            <div className="p-4 border-b">
+              <h2 className="font-semibold flex items-center gap-2">
+                <MessageCircle className="h-5 w-5" />
+                Your Conversations
+              </h2>
+            </div>
             <ConversationList
               onConversationSelect={handleConversationSelect}
-              selectedConversationId={selectedConversationId}
+              selectedConversationId={selectedConversation?.id}
+              refreshTrigger={refreshTrigger}
             />
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Chat Area */}
-        <Card className="lg:col-span-2">
-          <CardContent className="flex items-center justify-center h-full">
-            {selectedConversationId ? (
-              <div className="text-center">
-                <MessageCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">Chat Interface</h3>
-                <p className="text-muted-foreground">Chat interface for conversation: {selectedConversationId}</p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  (Chat interface will be implemented in the next phase)
-                </p>
-              </div>
-            ) : (
-              <div className="text-center">
-                <MessageCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">Select a conversation</h3>
-                <p className="text-muted-foreground">Choose a conversation from the list to start messaging</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Chat Interface */}
+        <div className={`lg:col-span-2 ${!showMobileChat ? "hidden lg:block" : ""}`}>
+          <div className="border rounded-lg h-full flex flex-col">
+            <ChatInterface conversation={selectedConversation} onBack={handleBackToList} />
+          </div>
+        </div>
       </div>
+
+      <NewChatDialog
+        open={showNewChatDialog}
+        onOpenChange={setShowNewChatDialog}
+        onConversationCreated={handleNewConversation}
+      />
     </div>
   )
 }

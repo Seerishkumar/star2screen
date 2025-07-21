@@ -4,90 +4,84 @@ import { createClient } from "@supabase/supabase-js"
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+})
+
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 User search API called")
-
     const { searchParams } = new URL(request.url)
     const query = searchParams.get("q")
 
-    if (!query || query.length < 2) {
-      console.log("❌ Invalid search query:", query)
-      return NextResponse.json({
-        users: [],
-        count: 0,
-        query: query || "",
-        error: "Search query must be at least 2 characters",
-      })
-    }
+    console.log("🔍 User search API called")
+    console.log("🔍 Search query:", query)
 
-    console.log("🔍 Searching for:", query)
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error("❌ Missing Supabase environment variables")
+    if (!query || query.trim().length < 2) {
       return NextResponse.json(
         {
-          error: "Server configuration error",
+          error: "Search query must be at least 2 characters",
           users: [],
         },
-        { status: 500 },
+        { status: 400 },
       )
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
+    // Check what columns exist in the table
+    console.log("📊 Checking table structure...")
+    const { data: tableInfo, error: tableError } = await supabase
+      .rpc("get_table_columns", { table_name: "author_profiles" })
+      .single()
 
-    // First, check what columns exist in the table
-    console.log("🔍 Checking table structure...")
-    const { data: tableStructure, error: structureError } = await supabase.from("author_profiles").select("*").limit(1)
-
-    if (structureError) {
-      console.error("❌ Error checking table structure:", structureError)
-      return NextResponse.json(
-        {
-          error: "Database structure error",
-          details: structureError.message,
-          users: [],
-        },
-        { status: 500 },
-      )
+    if (tableError) {
+      console.log("⚠️ Could not check table structure, using basic columns")
     }
-
-    console.log("✅ Table structure sample:", tableStructure?.[0] ? Object.keys(tableStructure[0]) : "No data")
 
     // Build dynamic SELECT query based on available columns
-    const availableColumns = tableStructure?.[0] ? Object.keys(tableStructure[0]) : []
-    const baseColumns = ["id", "user_id", "display_name", "full_name", "bio"]
-    const optionalColumns = ["profession", "profile_picture_url", "category", "location"]
+    let selectColumns = `
+      user_id,
+      display_name,
+      full_name,
+      bio
+    `
 
-    const selectColumns = [
-      ...baseColumns.filter((col) => availableColumns.includes(col)),
-      ...optionalColumns.filter((col) => availableColumns.includes(col)),
-    ]
+    // Add optional columns if they exist
+    const { data: columnCheck } = await supabase
+      .from("information_schema.columns")
+      .select("column_name")
+      .eq("table_name", "author_profiles")
+      .in("column_name", ["profile_picture_url", "category", "location"])
 
-    console.log("🔍 Using columns:", selectColumns)
+    if (columnCheck && columnCheck.length > 0) {
+      const availableColumns = columnCheck.map((col) => col.column_name)
+      if (availableColumns.includes("profile_picture_url")) {
+        selectColumns += ", profile_picture_url"
+      }
+      if (availableColumns.includes("category")) {
+        selectColumns += ", category"
+      }
+      if (availableColumns.includes("location")) {
+        selectColumns += ", location"
+      }
+    }
 
-    // Search in author_profiles
-    const { data: profiles, error } = await supabase
+    console.log("📊 Using SELECT columns:", selectColumns)
+
+    // Search for users
+    const { data: profiles, error: searchError } = await supabase
       .from("author_profiles")
-      .select(selectColumns.join(", "))
-      .or(
-        `display_name.ilike.%${query}%,full_name.ilike.%${query}%,bio.ilike.%${query}%${
-          availableColumns.includes("profession") ? `,profession.ilike.%${query}%` : ""
-        }`,
-      )
+      .select(selectColumns)
+      .or(`display_name.ilike.%${query}%,full_name.ilike.%${query}%`)
       .limit(10)
 
-    if (error) {
-      console.error("❌ Error searching profiles:", error)
+    if (searchError) {
+      console.error("❌ Search error:", searchError)
       return NextResponse.json(
         {
           error: "Search failed",
-          details: error.message,
+          details: searchError.message,
           users: [],
         },
         { status: 500 },
@@ -96,29 +90,25 @@ export async function GET(request: NextRequest) {
 
     console.log("✅ Found profiles:", profiles?.length || 0)
 
-    // Transform profiles to include fallback values for missing columns
-    const users = (profiles || []).map((profile) => ({
-      id: profile.id,
+    // Transform the results to ensure consistent structure
+    const transformedUsers = (profiles || []).map((profile) => ({
       user_id: profile.user_id,
       display_name: profile.display_name || profile.full_name || "Unknown User",
-      stage_name: profile.display_name,
       full_name: profile.full_name || profile.display_name || "Unknown User",
       bio: profile.bio || "",
-      profession: profile.profession || "Not specified",
       profile_picture_url: profile.profile_picture_url || null,
       category: profile.category || "Not specified",
       location: profile.location || "Not specified",
     }))
 
-    console.log("🔄 Transformed users:", users.length)
+    console.log("🔄 Transformed users:", transformedUsers.length)
 
     return NextResponse.json({
-      users,
-      count: users.length,
-      query,
+      users: transformedUsers,
+      query: query,
     })
   } catch (error) {
-    console.error("💥 Unexpected error in user search:", error)
+    console.error("❌ Search API error:", error)
     return NextResponse.json(
       {
         error: "Internal server error",

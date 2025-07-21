@@ -1,170 +1,242 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
-import { cookies } from "next/headers"
+import { createClient } from "@supabase/supabase-js"
+import { randomUUID } from "crypto"
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+})
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get("sb-access-token")?.value
-
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(token)
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const page = Number.parseInt(searchParams.get("page") || "1")
-    const limit = Number.parseInt(searchParams.get("limit") || "50")
-    const offset = (page - 1) * limit
-
     const conversationId = params.id
+    console.log("📨 Fetching messages for conversation:", conversationId)
 
-    // Get messages with sender info
-    const { data: messages, error } = await supabase
+    if (!conversationId) {
+      return NextResponse.json(
+        {
+          error: "Conversation ID is required",
+          messages: [],
+        },
+        { status: 400 },
+      )
+    }
+
+    // Get messages for the conversation
+    const { data: messages, error: messagesError } = await supabase
       .from("messages")
       .select(`
-        *,
-        author_profiles!messages_sender_id_fkey(
-          display_name,
-          full_name,
-          profile_picture_url
-        ),
-        message_attachments(*),
-        message_reactions(
-          reaction,
-          user_id,
-          author_profiles!message_reactions_user_id_fkey(
-            display_name,
-            full_name
-          )
-        ),
-        reply_to:messages!messages_reply_to_id_fkey(
-          id,
-          content,
-          sender_id,
-          author_profiles!messages_sender_id_fkey(
-            display_name,
-            full_name
-          )
-        )
+        id,
+        content,
+        sender_id,
+        conversation_id,
+        created_at
       `)
       .eq("conversation_id", conversationId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1)
+      .order("created_at", { ascending: true })
 
-    if (error) {
-      console.error("Error fetching messages:", error)
-      return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 })
+    if (messagesError) {
+      console.error("❌ Error fetching messages:", messagesError)
+      return NextResponse.json(
+        {
+          error: "Failed to fetch messages",
+          details: messagesError.message,
+          messages: [],
+        },
+        { status: 500 },
+      )
     }
 
-    return NextResponse.json({ messages: messages.reverse() })
+    console.log("✅ Found messages:", messages?.length || 0)
+
+    // Get sender profiles for all messages
+    const senderIds = [...new Set((messages || []).map((m) => m.sender_id))]
+    let senderProfiles: Record<string, any> = {}
+
+    if (senderIds.length > 0) {
+      try {
+        // Try to get profiles with all columns
+        const { data: profiles, error: profilesError } = await supabase
+          .from("author_profiles")
+          .select("user_id, display_name, full_name, profile_picture_url")
+          .in("user_id", senderIds)
+
+        if (profilesError) {
+          console.warn("⚠️ Error with full profile query, trying basic columns:", profilesError)
+
+          // Fallback to basic columns
+          const { data: basicProfiles, error: basicError } = await supabase
+            .from("author_profiles")
+            .select("user_id, display_name, full_name")
+            .in("user_id", senderIds)
+
+          if (basicError) {
+            console.error("❌ Error fetching basic profiles:", basicError)
+          } else {
+            senderProfiles = (basicProfiles || []).reduce(
+              (acc, profile) => {
+                acc[profile.user_id] = {
+                  ...profile,
+                  profile_picture_url: null,
+                }
+                return acc
+              },
+              {} as Record<string, any>,
+            )
+          }
+        } else {
+          senderProfiles = (profiles || []).reduce(
+            (acc, profile) => {
+              acc[profile.user_id] = profile
+              return acc
+            },
+            {} as Record<string, any>,
+          )
+        }
+      } catch (error) {
+        console.error("❌ Error fetching sender profiles:", error)
+        // Create fallback profiles
+        senderProfiles = senderIds.reduce(
+          (acc, id) => {
+            acc[id] = {
+              user_id: id,
+              display_name: "Unknown User",
+              full_name: "Unknown User",
+              profile_picture_url: null,
+            }
+            return acc
+          },
+          {} as Record<string, any>,
+        )
+      }
+    }
+
+    // Enrich messages with sender info
+    const enrichedMessages = (messages || []).map((message) => ({
+      ...message,
+      sender: senderProfiles[message.sender_id] || {
+        user_id: message.sender_id,
+        display_name: "Unknown User",
+        full_name: "Unknown User",
+        profile_picture_url: null,
+      },
+    }))
+
+    return NextResponse.json({
+      messages: enrichedMessages,
+    })
   } catch (error) {
-    console.error("Error in messages API:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("❌ Messages API error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+        messages: [],
+      },
+      { status: 500 },
+    )
   }
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get("sb-access-token")?.value
-
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(token)
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const body = await request.json()
-    const { content, senderId, messageType = "text", replyToId, attachments } = body
-
     const conversationId = params.id
+    const body = await request.json()
+    const { content, senderId } = body
 
-    if (!content && !attachments?.length) {
-      return NextResponse.json({ error: "Message content or attachments required" }, { status: 400 })
+    console.log("📨 Creating message for conversation:", conversationId)
+    console.log("📨 Sender:", senderId)
+    console.log("📨 Content:", content)
+
+    if (!content || !senderId) {
+      return NextResponse.json(
+        {
+          error: "Content and sender ID are required",
+          message: null,
+        },
+        { status: 400 },
+      )
     }
 
-    if (!senderId) {
-      return NextResponse.json({ error: "Sender ID is required" }, { status: 400 })
-    }
-
-    // Verify user is participant in conversation
-    const { data: participant } = await supabase
-      .from("conversation_participants")
-      .select("id")
-      .eq("conversation_id", conversationId)
+    // Verify sender exists in author_profiles
+    const { data: senderProfile, error: senderError } = await supabase
+      .from("author_profiles")
+      .select("user_id, display_name, full_name")
       .eq("user_id", senderId)
       .single()
 
-    if (!participant) {
-      return NextResponse.json({ error: "User is not a participant in this conversation" }, { status: 403 })
+    if (senderError) {
+      console.error("❌ Error verifying sender:", senderError)
+      return NextResponse.json(
+        {
+          error: "Invalid sender",
+          details: senderError.message,
+          message: null,
+        },
+        { status: 400 },
+      )
     }
 
     // Create message
+    const messageId = randomUUID()
+    const now = new Date().toISOString()
+
     const { data: message, error: messageError } = await supabase
       .from("messages")
       .insert({
+        id: messageId,
         conversation_id: conversationId,
         sender_id: senderId,
-        content,
-        message_type: messageType,
-        reply_to_id: replyToId,
+        content: content,
+        created_at: now,
       })
       .select(`
-        *,
-        author_profiles!messages_sender_id_fkey(
-          display_name,
-          full_name,
-          profile_picture_url
-        )
+        id,
+        content,
+        sender_id,
+        conversation_id,
+        created_at
       `)
       .single()
 
     if (messageError) {
-      console.error("Error creating message:", messageError)
-      return NextResponse.json({ error: "Failed to create message" }, { status: 500 })
+      console.error("❌ Error creating message:", messageError)
+      return NextResponse.json(
+        {
+          error: "Failed to create message",
+          details: messageError.message,
+          message: null,
+        },
+        { status: 500 },
+      )
     }
 
-    // Add attachments if any
-    if (attachments?.length) {
-      const attachmentData = attachments.map((att) => ({
-        message_id: message.id,
-        file_name: att.fileName,
-        file_size: att.fileSize,
-        file_type: att.fileType,
-        file_url: att.fileUrl,
-        thumbnail_url: att.thumbnailUrl,
-      }))
+    // Update conversation's updated_at timestamp
+    // await supabase.from("conversations").update({ updated_at: now }).eq("id", conversationId)
 
-      await supabase.from("message_attachments").insert(attachmentData)
-    }
+    console.log("✅ Message created successfully:", messageId)
 
-    // Update participant's last_read_at
-    await supabase
-      .from("conversation_participants")
-      .update({ last_read_at: new Date().toISOString() })
-      .eq("conversation_id", conversationId)
-      .eq("user_id", senderId)
-
-    return NextResponse.json({ message })
+    // Return message with sender info
+    return NextResponse.json({
+      message: {
+        ...message,
+        sender: senderProfile,
+      },
+    })
   } catch (error) {
-    console.error("Error in send message API:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("❌ Create message error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+        message: null,
+      },
+      { status: 500 },
+    )
   }
 }
