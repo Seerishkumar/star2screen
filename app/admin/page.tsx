@@ -1,419 +1,323 @@
 "use client"
 
-import { useState } from "react"
-import Image from "next/image"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
+  Shield,
   Users,
-  Building,
-  MessageSquare,
-  Flag,
-  MoreHorizontal,
-  CheckCircle,
-  XCircle,
-  Eye,
+  FileText,
   ImageIcon,
   Video,
-  FileText,
-  Megaphone,
+  Settings,
+  BarChart3,
+  MessageSquare,
+  Crown,
+  LogOut,
+  Home,
 } from "lucide-react"
-import { BannerManagement } from "@/components/admin/banner-management"
-import { AdsManagement } from "@/components/admin/ads-management"
-import { ArticleManagement } from "@/components/admin/article-management"
-import { VideoManagement } from "@/components/admin/video-management"
+
+interface AdminUser {
+  id: number
+  email: string
+  name: string
+  role: string
+}
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState("overview")
+  const [adminUser, setAdminUser] = useState<AdminUser | null>(null)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
-  // Mock data for overview
-  const stats = {
-    totalUsers: 1248,
-    totalServices: 324,
-    pendingApprovals: 5,
-    reportedContent: 2,
-    totalBanners: 5,
-    totalAds: 12,
-    totalArticles: 28,
-    totalVideos: 15,
+  useEffect(() => {
+    // Check if user is logged in
+    const token = localStorage.getItem("adminToken")
+    const userStr = localStorage.getItem("adminUser")
+
+    if (!token || !userStr) {
+      router.push("/admin/login")
+      return
+    }
+
+    try {
+      const user = JSON.parse(userStr)
+      setAdminUser(user)
+    } catch (error) {
+      console.error("Failed to parse admin user:", error)
+      router.push("/admin/login")
+      return
+    }
+
+    setLoading(false)
+  }, [router])
+
+  const handleLogout = () => {
+    localStorage.removeItem("adminToken")
+    localStorage.removeItem("adminUser")
+    router.push("/admin/login")
   }
 
-  const pendingProfiles = [
+  const getRoleBadgeVariant = (role: string) => {
+    switch (role) {
+      case "super_admin":
+        return "destructive"
+      case "admin":
+        return "default"
+      case "content_admin":
+        return "secondary"
+      case "moderator":
+        return "outline"
+      default:
+        return "outline"
+    }
+  }
+
+  const getRoleDisplayName = (role: string) => {
+    switch (role) {
+      case "super_admin":
+        return "Super Admin"
+      case "content_admin":
+        return "Content Admin"
+      case "moderator":
+        return "Moderator"
+      default:
+        return role.charAt(0).toUpperCase() + role.slice(1)
+    }
+  }
+
+  const adminMenuItems = [
     {
-      id: 1,
-      name: "Rahul Verma",
-      type: "Actor",
-      email: "rahul@example.com",
-      date: "2024-04-10",
-      image: "/placeholder.svg?height=40&width=40",
+      title: "User Management",
+      description: "Manage users, roles, and permissions",
+      icon: Users,
+      href: "/admin/users",
+      roles: ["super_admin", "admin"],
     },
     {
-      id: 2,
-      name: "Sneha Patel",
-      type: "Director",
-      email: "sneha@example.com",
-      date: "2024-04-09",
-      image: "/placeholder.svg?height=40&width=40",
+      title: "Content Management",
+      description: "Manage articles, blogs, and content",
+      icon: FileText,
+      href: "/admin/content",
+      roles: ["super_admin", "admin", "content_admin"],
     },
     {
-      id: 3,
-      name: "Arjun Singh",
-      type: "Cinematographer",
-      email: "arjun@example.com",
-      date: "2024-04-08",
-      image: "/placeholder.svg?height=40&width=40",
+      title: "Banner Management",
+      description: "Manage homepage banners and promotions",
+      icon: ImageIcon,
+      href: "/admin/banners",
+      roles: ["super_admin", "admin", "content_admin"],
+    },
+    {
+      title: "Video Management",
+      description: "Manage video content and showcases",
+      icon: Video,
+      href: "/admin/videos",
+      roles: ["super_admin", "admin", "content_admin"],
+    },
+    {
+      title: "Analytics",
+      description: "View site analytics and reports",
+      icon: BarChart3,
+      href: "/admin/analytics",
+      roles: ["super_admin", "admin"],
+    },
+    {
+      title: "Messages & Reports",
+      description: "Moderate content and handle reports",
+      icon: MessageSquare,
+      href: "/admin/moderation",
+      roles: ["super_admin", "admin", "moderator"],
+    },
+    {
+      title: "System Settings",
+      description: "Configure system settings and preferences",
+      icon: Settings,
+      href: "/admin/settings",
+      roles: ["super_admin"],
     },
   ]
 
-  const pendingServices = [
-    {
-      id: 1,
-      name: "Cine Equipment Rentals",
-      type: "Equipment Rental",
-      email: "info@cineequipment.com",
-      date: "2024-04-10",
-    },
-    {
-      id: 2,
-      name: "Studio 9 Productions",
-      type: "Studio Rental",
-      email: "bookings@studio9.com",
-      date: "2024-04-09",
-    },
-  ]
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Shield className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Loading admin dashboard...</p>
+        </div>
+      </div>
+    )
+  }
 
-  const reportedContent = [
-    {
-      id: 1,
-      content: "Inappropriate profile description",
-      reportedBy: "user123",
-      date: "2024-04-10",
-    },
-    {
-      id: 2,
-      content: "Fake service listing",
-      reportedBy: "user456",
-      date: "2024-04-09",
-    },
-  ]
+  if (!adminUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Alert variant="destructive">
+          <AlertDescription>Access denied. Please log in as an administrator.</AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
+  const availableMenuItems = adminMenuItems.filter((item) => item.roles.includes(adminUser.role))
 
   return (
-    <div className="container px-4 py-8 md:px-6 md:py-12">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-        <p className="text-muted-foreground">Manage profiles, services, content, and home page sections</p>
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Shield className="h-8 w-8 text-purple-600" />
+              <div>
+                <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+                <p className="text-sm text-gray-600">Stars2Screen Administration</p>
+              </div>
+            </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6 grid w-full grid-cols-3 lg:grid-cols-6">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="banners">
-            <ImageIcon className="h-4 w-4 mr-2" />
-            Banners
-          </TabsTrigger>
-          <TabsTrigger value="ads">
-            <Megaphone className="h-4 w-4 mr-2" />
-            Promotions
-          </TabsTrigger>
-          <TabsTrigger value="articles">
-            <FileText className="h-4 w-4 mr-2" />
-            Articles
-          </TabsTrigger>
-          <TabsTrigger value="videos">
-            <Video className="h-4 w-4 mr-2" />
-            Videos
-          </TabsTrigger>
-          <TabsTrigger value="moderation">Moderation</TabsTrigger>
-        </TabsList>
+            <div className="flex items-center space-x-4">
+              <Badge variant={getRoleBadgeVariant(adminUser.role)} className="flex items-center gap-1">
+                <Crown className="h-3 w-3" />
+                {getRoleDisplayName(adminUser.role)}
+              </Badge>
 
-        <TabsContent value="overview">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalUsers.toLocaleString()}</div>
-                <p className="text-xs text-muted-foreground">+12% from last month</p>
-              </CardContent>
-            </Card>
+              <div className="text-right">
+                <p className="text-sm font-medium">{adminUser.name}</p>
+                <p className="text-xs text-gray-600">{adminUser.email}</p>
+              </div>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Services</CardTitle>
-                <Building className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalServices}</div>
-                <p className="text-xs text-muted-foreground">+5% from last month</p>
-              </CardContent>
-            </Card>
+              <Button variant="outline" size="sm" onClick={() => router.push("/")}>
+                <Home className="h-4 w-4 mr-2" />
+                Back to Site
+              </Button>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Banners</CardTitle>
-                <ImageIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalBanners}</div>
-                <p className="text-xs text-muted-foreground">Homepage carousel</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Promotions</CardTitle>
-                <Megaphone className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalAds}</div>
-                <p className="text-xs text-muted-foreground">Active advertisements</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Articles</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalArticles}</div>
-                <p className="text-xs text-muted-foreground">Published content</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Videos</CardTitle>
-                <Video className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalVideos}</div>
-                <p className="text-xs text-muted-foreground">Featured videos</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Approvals</CardTitle>
-                <MessageSquare className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.pendingApprovals}</div>
-                <p className="text-xs text-muted-foreground">-2 from yesterday</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Reported Content</CardTitle>
-                <Flag className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.reportedContent}</div>
-                <p className="text-xs text-muted-foreground">+1 from yesterday</p>
-              </CardContent>
-            </Card>
+              <Button variant="outline" size="sm" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
+            </div>
           </div>
-        </TabsContent>
+        </div>
+      </header>
 
-        <TabsContent value="banners">
-          <BannerManagement />
-        </TabsContent>
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold mb-2">Welcome back, {adminUser.name}!</h2>
+          <p className="text-gray-600">Manage your Stars2Screen platform from this dashboard.</p>
+        </div>
 
-        <TabsContent value="ads">
-          <AdsManagement />
-        </TabsContent>
+        {/* Quick Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Users</p>
+                  <p className="text-2xl font-bold">1,234</p>
+                </div>
+                <Users className="h-8 w-8 text-blue-600" />
+              </div>
+            </CardContent>
+          </Card>
 
-        <TabsContent value="articles">
-          <ArticleManagement />
-        </TabsContent>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Articles</p>
+                  <p className="text-2xl font-bold">89</p>
+                </div>
+                <FileText className="h-8 w-8 text-green-600" />
+              </div>
+            </CardContent>
+          </Card>
 
-        <TabsContent value="videos">
-          <VideoManagement />
-        </TabsContent>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Active Banners</p>
+                  <p className="text-2xl font-bold">12</p>
+                </div>
+                <ImageIcon className="h-8 w-8 text-purple-600" />
+              </div>
+            </CardContent>
+          </Card>
 
-        <TabsContent value="moderation">
-          <div className="space-y-6">
-            <Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Videos</p>
+                  <p className="text-2xl font-bold">45</p>
+                </div>
+                <Video className="h-8 w-8 text-red-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Admin Menu */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {availableMenuItems.map((item, index) => (
+            <Card key={index} className="hover:shadow-lg transition-shadow cursor-pointer">
               <CardHeader>
-                <CardTitle>Pending Profile Approvals</CardTitle>
-                <CardDescription>Review and approve new professional profiles</CardDescription>
+                <CardTitle className="flex items-center space-x-2">
+                  <item.icon className="h-5 w-5" />
+                  <span>{item.title}</span>
+                </CardTitle>
+                <CardDescription>{item.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pendingProfiles.map((profile) => (
-                      <TableRow key={profile.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <div className="h-10 w-10 overflow-hidden rounded-full">
-                              <Image
-                                src={profile.image || "/placeholder.svg?height=40&width=40&query=profile headshot"}
-                                alt={profile.name}
-                                width={40}
-                                height={40}
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                            <span>{profile.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{profile.type}</TableCell>
-                        <TableCell>{profile.email}</TableCell>
-                        <TableCell>{profile.date}</TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">Actions</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
-                                <Eye className="mr-2 h-4 w-4" />
-                                View
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <CheckCircle className="mr-2 h-4 w-4" />
-                                Approve
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Reject
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <Button className="w-full" onClick={() => router.push(item.href)} variant="outline">
+                  Access
+                </Button>
               </CardContent>
             </Card>
+          ))}
+        </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Pending Service Approvals</CardTitle>
-                <CardDescription>Review and approve new service listings</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pendingServices.map((service) => (
-                      <TableRow key={service.id}>
-                        <TableCell className="font-medium">{service.name}</TableCell>
-                        <TableCell>{service.type}</TableCell>
-                        <TableCell>{service.email}</TableCell>
-                        <TableCell>{service.date}</TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">Actions</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
-                                <Eye className="mr-2 h-4 w-4" />
-                                View
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <CheckCircle className="mr-2 h-4 w-4" />
-                                Approve
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Reject
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+        {/* Recent Activity */}
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+            <CardDescription>Latest actions and system events</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">New user registration</p>
+                  <p className="text-xs text-gray-600">john.doe@example.com joined the platform</p>
+                </div>
+                <p className="text-xs text-gray-500">2 minutes ago</p>
+              </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Reported Content</CardTitle>
-                <CardDescription>Review and moderate reported content</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Content</TableHead>
-                      <TableHead>Reported By</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportedContent.map((report) => (
-                      <TableRow key={report.id}>
-                        <TableCell className="font-medium">{report.content}</TableCell>
-                        <TableCell>{report.reportedBy}</TableCell>
-                        <TableCell>{report.date}</TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">Actions</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
-                                <Eye className="mr-2 h-4 w-4" />
-                                View
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <CheckCircle className="mr-2 h-4 w-4" />
-                                Dismiss
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Remove Content
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+              <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Article published</p>
+                  <p className="text-xs text-gray-600">"Top 10 Acting Tips" was published</p>
+                </div>
+                <p className="text-xs text-gray-500">1 hour ago</p>
+              </div>
+
+              <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
+                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Banner updated</p>
+                  <p className="text-xs text-gray-600">Homepage banner was modified</p>
+                </div>
+                <p className="text-xs text-gray-500">3 hours ago</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   )
 }
