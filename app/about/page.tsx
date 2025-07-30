@@ -19,28 +19,16 @@ export default function AboutPage() {
 
   const team = [
     {
-      name: "Sarah Johnson",
+      name: "Sudheer Talasila",
       role: "CEO & Founder",
-      image: "/elegant-woman-red.png",
+      image: "",
       bio: "Former casting director with 15+ years in the film industry.",
     },
     {
-      name: "Michael Chen",
-      role: "CTO",
-      image: "/confident-businessman.png",
-      bio: "Tech entrepreneur passionate about connecting creative professionals.",
-    },
-    {
-      name: "Emma Rodriguez",
-      role: "Head of Operations",
-      image: "/elegant-actress.png",
-      bio: "Industry veteran specializing in talent management and operations.",
-    },
-    {
-      name: "David Kumar",
-      role: "Head of Marketing",
-      image: "/confident-indian-professional.png",
-      bio: "Marketing strategist with expertise in entertainment industry growth.",
+      name: "Avan Alla",
+      role: "Marketing Head",
+      image: "",
+      bio: "Marketing Headpassionate about connecting creative professionals.",
     },
   ]
 
@@ -60,6 +48,7 @@ export default function AboutPage() {
               width={600}
               height={400}
               className="rounded-lg shadow-2xl"
+              priority
             />
           </div>
         </div>
@@ -115,6 +104,8 @@ export default function AboutPage() {
                       alt={member.name}
                       fill
                       className="rounded-full object-cover"
+                      sizes="128px"
+                      priority={index < 2}
                     />
                   </div>
                   <h3 className="text-xl font-semibold mb-2">{member.name}</h3>
