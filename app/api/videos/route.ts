@@ -1,117 +1,88 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url)
-    const featured = searchParams.get("featured") === "true"
-
-    console.log(`[/api/videos] Fetching videos, featured: ${featured}`)
-
-    // Rich fallback data for production
-    const fallbackVideos = [
-      {
-        id: 1,
-        title: "Acting Masterclass: Emotional Range and Depth",
-        description: "Learn how to expand your emotional range and bring authentic depth to your performances",
-        video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        thumbnail_url: "/confident-actress.png",
-        is_active: true,
-        is_featured: true,
-      },
-      {
-        id: 2,
-        title: "Behind the Camera: Cinematography Essentials",
-        description: "Essential cinematography techniques every filmmaker and actor should understand",
-        video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        thumbnail_url: "/bustling-film-set.png",
-        is_active: true,
-        is_featured: true,
-      },
-      {
-        id: 3,
-        title: "Director's Vision: From Script to Screen",
-        description: "How directors bring their creative vision to life and work with actors",
-        video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        thumbnail_url: "/director-in-discussion.png",
-        is_active: true,
-        is_featured: true,
-      },
-      {
-        id: 4,
-        title: "Casting Director Insights: What We Look For",
-        description: "Industry professionals share what they look for in auditions and headshots",
-        video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        thumbnail_url: "/elegant-actress.png",
-        is_active: true,
-        is_featured: false,
-      },
-      {
-        id: 5,
-        title: "Building Your Acting Portfolio",
-        description: "Tips for creating a compelling portfolio that gets you noticed",
-        video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        thumbnail_url: "/confident-young-professional.png",
-        is_active: true,
-        is_featured: false,
-      },
-      {
-        id: 6,
-        title: "Networking in the Entertainment Industry",
-        description: "How to build meaningful professional relationships in Hollywood",
-        video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        thumbnail_url: "/bustling-city-street.png",
-        is_active: true,
-        is_featured: false,
-      },
-    ]
-
-    try {
-      const supabase = createServerSupabaseClient()
-
-      let query = supabase
-        .from("videos")
-        .select("*")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(6)
-
-      if (featured) {
-        query = query.eq("is_featured", true)
-      }
-
-      const { data: videos, error } = await query
-
-      // If we have valid data from database, use it
-      if (!error && videos && videos.length > 0) {
-        console.log(`[/api/videos] Found ${videos.length} videos from database`)
-        return NextResponse.json({ videos })
-      }
-
-      // If database fails or returns no data, use fallback
-      console.log("[/api/videos] Using fallback data")
-      const filteredVideos = featured ? fallbackVideos.filter((v) => v.is_featured) : fallbackVideos
-
-      return NextResponse.json({ videos: filteredVideos.slice(0, 6) })
-    } catch (dbError) {
-      console.error("[/api/videos] Database connection error:", dbError)
-      const filteredVideos = featured ? fallbackVideos.filter((v) => v.is_featured) : fallbackVideos
-
-      return NextResponse.json({ videos: filteredVideos.slice(0, 6) })
+    console.log("🔍 Fetching public videos...")
+    
+    // Check environment variables
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ Missing Supabase environment variables")
+      return NextResponse.json({ 
+        error: "Missing Supabase environment variables",
+        supabaseUrl: supabaseUrl ? 'SET' : 'NOT_SET',
+        supabaseKey: supabaseKey ? 'SET' : 'NOT_SET'
+      }, { status: 500 })
     }
-  } catch (error) {
-    console.error("[/api/videos] Unexpected error:", error)
 
-    // Always return fallback data on any error
-    const sampleVideos = [
-      {
-        id: 1,
-        title: "Acting Masterclass: Emotional Range",
-        description: "Learn how to expand your emotional range as an actor",
-        video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        thumbnail_url: "/confident-actress.png",
-      },
-    ]
-    return NextResponse.json({ videos: sampleVideos })
+    console.log("✅ Environment variables found")
+    console.log("🔗 Supabase URL:", supabaseUrl)
+
+    // Create client with service role key (bypasses RLS)
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+
+    console.log("🔍 Attempting to connect to database with service role...")
+
+    // Fetch only active videos for public display
+    const { data: videos, error } = await supabase
+      .from("videos")
+      .select("*")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+
+    if (error) {
+      console.error("❌ Error fetching public videos:", error)
+      
+      if (error.code === "42P01") {
+        console.error("❌ Table 'videos' does not exist!")
+        return NextResponse.json({ 
+          error: "Videos table does not exist. Please run the database setup script.",
+          code: error.code,
+          details: error.message,
+          hint: "Run scripts/36-fix-production-banner-issues.sql in your Supabase SQL editor"
+        }, { status: 500 })
+      }
+      
+      return NextResponse.json({ 
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: "Check database connection and table structure"
+      }, { status: 500 })
+    }
+
+    console.log(`✅ Successfully fetched ${videos?.length || 0} active videos`)
+    
+    // Log video details for debugging
+    if (videos && videos.length > 0) {
+      console.log("📊 Active video details:")
+      videos.forEach((video, index) => {
+        console.log(`  ${index + 1}. ID: ${video.id}, Title: ${video.title}, Active: ${video.is_active}`)
+      })
+    } else {
+      console.log("⚠️ No active videos found in database")
+    }
+
+    return NextResponse.json({ 
+      videos: videos || [],
+      count: videos?.length || 0,
+      timestamp: new Date().toISOString(),
+      success: true
+    })
+  } catch (error) {
+    console.error("❌ Unexpected error in GET /api/videos:", error)
+    return NextResponse.json({ 
+      error: "Internal Server Error",
+      details: error instanceof Error ? error.message : "Unknown error",
+      timestamp: new Date().toISOString()
+    }, { status: 500 })
   }
 }

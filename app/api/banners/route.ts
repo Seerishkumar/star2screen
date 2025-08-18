@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
 export async function GET() {
   try {
@@ -21,9 +21,15 @@ export async function GET() {
     console.log("✅ Environment variables found")
     console.log("🔗 Supabase URL:", supabaseUrl)
 
-    const supabase = createServerSupabaseClient()
+    // Create client with service role key (bypasses RLS)
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
 
-    console.log("🔍 Attempting to connect to database...")
+    console.log("🔍 Attempting to connect to database with service role...")
 
     // Fetch only active banners for public display
     const { data: banners, error } = await supabase
