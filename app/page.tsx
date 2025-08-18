@@ -137,7 +137,7 @@ const getBanners = () =>
       title: "Professional Networking",
       subtitle: "Build connections with industry professionals and creators",
       image_url: "/director-in-discussion.png",
-      link_url: "/categories",
+      link_url: "/image-03.jpg",
       button_text: "Start Networking",
     },
   ])
