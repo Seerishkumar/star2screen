@@ -121,21 +121,24 @@ const getBanners = () =>
       title: "",
       subtitle: "",
       image_url: "/banner-lg.b22301864329d06c67c7.jpg",
-      link_url: "/profiles",
+      link_url: "",
+      button_text: "",
     },
     {
       id: 2,
       title: "",
       subtitle: "",
       image_url: "/image-01-copy.jpg",
-      link_url: "/jobs",
+      link_url: "",
+      button_text: "",
     },
     {
       id: 3,
       title: "",
       subtitle: "",
       image_url: "/image-03.jpg",
-      link_url: "/image-03.jpg",
+      link_url: "",
+      button_text: "",
     },
   ])
 
