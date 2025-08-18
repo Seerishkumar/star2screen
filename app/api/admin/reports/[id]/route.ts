@@ -1,41 +1,27 @@
 import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase"
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const supabase = createServerSupabaseClient()
-
-    const { data: video, error } = await supabase
-      .from("videos")
-      .select("*")
-      .eq("id", params.id)
-      .single()
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 404 })
-    }
-
-    return NextResponse.json({ video })
-  } catch (error) {
-    console.error("Error fetching video:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
-  }
-}
-
 export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
     const supabase = createServerSupabaseClient()
-    const data = await request.json()
+    const { action } = await request.json()
 
-    const { data: video, error } = await supabase
-      .from("videos")
-      .update({ ...data, updated_at: new Date().toISOString() })
+    let status = "reviewed"
+    if (action === "resolve") {
+      status = "resolved"
+    } else if (action === "dismiss") {
+      status = "dismissed"
+    }
+
+    const { data: report, error } = await supabase
+      .from("reports")
+      .update({ 
+        status,
+        updated_at: new Date().toISOString()
+      })
       .eq("id", params.id)
       .select()
       .single()
@@ -44,9 +30,9 @@ export async function PUT(
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ video })
+    return NextResponse.json({ report })
   } catch (error) {
-    console.error("Error updating video:", error)
+    console.error("Error updating report:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
@@ -59,7 +45,7 @@ export async function DELETE(
     const supabase = createServerSupabaseClient()
 
     const { error } = await supabase
-      .from("videos")
+      .from("reports")
       .delete()
       .eq("id", params.id)
 
@@ -69,7 +55,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error deleting video:", error)
+    console.error("Error deleting report:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
-}
+} 
