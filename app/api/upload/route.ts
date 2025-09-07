@@ -1,6 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { put } from "@vercel/blob"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+// Use service role key to bypass RLS for server-side operations
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+)
 
 export async function POST(request: NextRequest) {
   try {
@@ -83,6 +95,18 @@ export async function POST(request: NextRequest) {
     const fileName = `media/${userId}/${timestamp}-${randomId}.${fileExt}`
 
     console.log(`Uploading file: ${fileName}, Size: ${file.size} bytes`)
+
+    // Check if BLOB_READ_WRITE_TOKEN is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.error("BLOB_READ_WRITE_TOKEN not configured")
+      return NextResponse.json(
+        { 
+          error: "File upload service not configured. Please contact administrator to set up BLOB_READ_WRITE_TOKEN environment variable.",
+          details: "Missing BLOB_READ_WRITE_TOKEN environment variable"
+        }, 
+        { status: 500 }
+      )
+    }
 
     // Upload to Vercel Blob using server-side put()
     const blob = await put(fileName, file, {

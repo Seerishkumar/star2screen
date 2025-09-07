@@ -6,7 +6,9 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "check-blob-config": "node -e \"console.log('🔍 Blob Config Check:'); console.log('BLOB_READ_WRITE_TOKEN:', process.env.BLOB_READ_WRITE_TOKEN ? '✅ Configured' : '❌ Missing'); console.log('Get token from: https://vercel.com/storage')\"",
+    "setup-blob": "scripts/setup-blob-config.bat"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

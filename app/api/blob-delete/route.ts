@@ -9,6 +9,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "URL is required" }, { status: 400 })
     }
 
+    // Check if BLOB_READ_WRITE_TOKEN is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.error("BLOB_READ_WRITE_TOKEN not configured")
+      return NextResponse.json(
+        { 
+          error: "File delete service not configured. Please contact administrator to set up BLOB_READ_WRITE_TOKEN environment variable.",
+          details: "Missing BLOB_READ_WRITE_TOKEN environment variable"
+        }, 
+        { status: 500 }
+      )
+    }
+
     // Delete from Vercel Blob
     await del(url)
 

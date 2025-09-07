@@ -1,8 +1,20 @@
 "use server"
 
 import { put } from "@vercel/blob"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 import { revalidatePath } from "next/cache"
+
+// Use service role key to bypass RLS for server-side operations
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+)
 
 export async function uploadMediaAction(formData: FormData) {
   try {
@@ -15,6 +27,11 @@ export async function uploadMediaAction(formData: FormData) {
 
     if (!file || !userId) {
       throw new Error("File and user ID are required")
+    }
+
+    // Check if BLOB_READ_WRITE_TOKEN is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      throw new Error("File upload service not configured. Please contact administrator to set up BLOB_READ_WRITE_TOKEN environment variable.")
     }
 
     // Generate unique filename
