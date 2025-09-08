@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,11 +18,25 @@ import { useAuth } from "./auth-provider"
 
 export function UserMenu() {
   const { user, profile, signOut } = useAuth()
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
 
   const handleSignOut = async () => {
     setIsLoading(true)
-    await signOut()
+    const { error } = await signOut()
+    // Best-effort client cleanup and redirect
+    try {
+      // Clear any cached admin data too (in case user visited admin)
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("adminToken")
+        localStorage.removeItem("adminUser")
+      }
+    } catch {}
+    if (!error) {
+      router.push("/")
+      // Ensure UI reflects signed-out state
+      router.refresh()
+    }
     setIsLoading(false)
   }
 

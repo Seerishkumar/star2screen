@@ -86,7 +86,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-8 border-t border-gray-700 pt-8 text-center">
-          <p className="text-sm">© 2024 Stars2Screen. All Rights Reserved.</p>
+          <p className="text-sm">© 2025 Stars2Screen. All Rights Reserved.</p>
           <div className="mt-4 flex justify-center space-x-4">
             <Link href="https://facebook.com" className="text-white hover:text-accent-gold">
               <span className="sr-only">Facebook</span>
